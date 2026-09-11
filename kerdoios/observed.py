@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 DEFAULT_LOG_PATH = Path(
@@ -51,9 +51,16 @@ class Observation:
     completed: bool
     actual_cost: float
     retried: bool = False
+    origin_provider: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    http_status: int | None = None
+    remaining_quota: float | None = None
+    remaining_source: str | None = None
+    error_class: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        payload = {
             "provider": self.provider,
             "model": self.model,
             "task_type": self.task_type,
@@ -61,15 +68,58 @@ class Observation:
             "actual_cost": self.actual_cost,
             "retried": self.retried,
         }
+        for key in (
+            "origin_provider",
+            "input_tokens",
+            "output_tokens",
+            "http_status",
+            "remaining_quota",
+            "remaining_source",
+            "error_class",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                payload[key] = value
+        return payload
 
 
-def record(observation: Observation, *, path: Path | None = None) -> None:
-    """Append one observation. Never raises on a writable filesystem; a
-    malformed observation is a caller bug, not something to hide."""
+def classify_http(http_status: int | None) -> str:
+    """Classify an HTTP status. Remaining quota is not an input; 0 is not exhausted.
+
+    402/429 are exhausted. 401/404 and any other >=400 are failed. Those codes
+    are never success.
+    """
+    if http_status is None:
+        return "success"
+    if http_status in (402, 429):
+        return "exhausted"
+    if http_status >= 400:
+        return "failed"
+    return "success"
+
+
+def normalize(observation: Observation) -> Observation:
+    """If http_status is set, coerce completed and error_class from it.
+
+    Do not default origin_provider onto old 6-field rows.
+    """
+    if observation.http_status is None:
+        return observation
+    error_class = classify_http(observation.http_status)
+    completed = error_class == "success"
+    if observation.error_class == error_class and observation.completed == completed:
+        return observation
+    return replace(observation, completed=completed, error_class=error_class)
+
+
+def record(observation: Observation, *, path: Path | None = None) -> Observation:
+    """Append one normalized observation and return the stored row."""
+    stored = normalize(observation)
     target = path or DEFAULT_LOG_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     with target.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(observation.to_dict()) + "\n")
+        fh.write(json.dumps(stored.to_dict()) + "\n")
+    return stored
 
 
 @dataclass(frozen=True)
@@ -102,16 +152,7 @@ def load_observations(*, path: Path | None = None) -> list[Observation]:
                 # One corrupt line must not lose every prior observation.
                 continue
             try:
-                rows.append(
-                    Observation(
-                        provider=payload["provider"],
-                        model=payload["model"],
-                        task_type=payload.get("task_type", "unknown"),
-                        completed=bool(payload["completed"]),
-                        actual_cost=float(payload["actual_cost"]),
-                        retried=bool(payload.get("retried", False)),
-                    )
-                )
+                rows.append(_observation_from_payload(payload))
             except (KeyError, TypeError, ValueError):
                 continue
     return rows
@@ -142,3 +183,41 @@ def aggregate(observations: list[Observation]) -> dict[tuple[str, str], OutcomeS
             retry_rate=sum(1 for r in rows if r.retried) / n,
         )
     return stats
+
+
+def _opt_str(payload: dict, key: str) -> str | None:
+    if key not in payload or payload[key] is None:
+        return None
+    text = str(payload[key]).strip()
+    return text or None
+
+
+def _opt_int(payload: dict, key: str) -> int | None:
+    if key not in payload or payload[key] is None or payload[key] == "":
+        return None
+    return int(payload[key])
+
+
+def _opt_float(payload: dict, key: str) -> float | None:
+    if key not in payload or payload[key] is None or payload[key] == "":
+        return None
+    return float(payload[key])
+
+
+def _observation_from_payload(payload: dict) -> Observation:
+    """Load a row. Old 6-field JSONL stays valid; origin_provider is not inferred."""
+    return Observation(
+        provider=payload["provider"],
+        model=payload["model"],
+        task_type=payload.get("task_type", "unknown"),
+        completed=bool(payload["completed"]),
+        actual_cost=float(payload["actual_cost"]),
+        retried=bool(payload.get("retried", False)),
+        origin_provider=_opt_str(payload, "origin_provider"),
+        input_tokens=_opt_int(payload, "input_tokens"),
+        output_tokens=_opt_int(payload, "output_tokens"),
+        http_status=_opt_int(payload, "http_status"),
+        remaining_quota=_opt_float(payload, "remaining_quota"),
+        remaining_source=_opt_str(payload, "remaining_source"),
+        error_class=_opt_str(payload, "error_class"),
+    )

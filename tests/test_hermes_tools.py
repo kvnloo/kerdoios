@@ -56,7 +56,20 @@ class RegisterTests(unittest.TestCase):
         props = ctx.tools["kerdoios_record"]["schema"]["parameters"]["properties"]
         self.assertEqual(
             set(props),
-            {"provider", "model", "task_type", "completed", "cost", "retried"},
+            {
+                "provider",
+                "model",
+                "task_type",
+                "completed",
+                "cost",
+                "retried",
+                "origin_provider",
+                "input_tokens",
+                "output_tokens",
+                "http_status",
+                "remaining_quota",
+                "remaining_source",
+            },
         )
         required = ctx.tools["kerdoios_record"]["schema"]["parameters"]["required"]
         self.assertEqual(set(required), {"provider", "model"})

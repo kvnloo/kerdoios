@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .explain import explain
@@ -11,6 +12,7 @@ from .observed import Observation, record
 from .optimize import plan
 from .providers.free import is_free
 from .types import Mode, WorkRequirement
+from .watchdog import report
 
 
 def _req(ns: argparse.Namespace) -> WorkRequirement:
@@ -93,10 +95,20 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--completed", action="store_true")
     record_p.add_argument("--cost", type=float, default=0.0)
     record_p.add_argument("--retried", action="store_true")
+    record_p.add_argument("--origin-provider", default=None)
+    record_p.add_argument("--input-tokens", type=int, default=None)
+    record_p.add_argument("--output-tokens", type=int, default=None)
+    record_p.add_argument("--http-status", type=int, default=None)
+    record_p.add_argument("--remaining-quota", type=float, default=None)
+    record_p.add_argument("--remaining-source", default=None)
+
+    wd_p = sub.add_parser("watchdog", help="Tokenomics watchdog: burn rate per origin provider")
+    wd_p.add_argument("--observed-log", default=None)
+    wd_p.add_argument("--live-free", action="store_true")
 
     ns = parser.parse_args(argv)
     if ns.command == "record":
-        record(
+        stored = record(
             Observation(
                 provider=ns.provider,
                 model=ns.model,
@@ -104,8 +116,19 @@ def main(argv: list[str] | None = None) -> int:
                 completed=ns.completed,
                 actual_cost=ns.cost,
                 retried=ns.retried,
+                origin_provider=ns.origin_provider,
+                input_tokens=ns.input_tokens,
+                output_tokens=ns.output_tokens,
+                http_status=ns.http_status,
+                remaining_quota=ns.remaining_quota,
+                remaining_source=ns.remaining_source,
             )
         )
+        print(json.dumps(stored.to_dict(), indent=2))
+        return 0
+    if ns.command == "watchdog":
+        path = Path(ns.observed_log) if ns.observed_log else None
+        print(json.dumps(report(path=path, live_free=bool(ns.live_free)), indent=2))
         return 0
     requirement = None
     if ns.command != "inventory":
