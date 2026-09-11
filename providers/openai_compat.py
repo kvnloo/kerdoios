@@ -6,7 +6,7 @@ import os
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
 from .base import ResourceProvider
-from .http import get_json
+from .http import get_json_response, quota_from_headers
 
 GROQ_MODELS = "https://api.groq.com/openai/v1/models"
 CEREBRAS_MODELS = "https://api.cerebras.ai/v1/models"
@@ -17,17 +17,19 @@ def _catalog(
     provider: str,
     url: str,
     api_key: str | None,
-    free_quota: float,
     concurrency: int,
     latency_ms: float,
 ) -> list[ResourceOffer]:
     if not api_key:
         return []
-    payload = get_json(url, api_key=api_key)
-    if not payload:
+    fetched = get_json_response(url, api_key=api_key)
+    if not fetched:
         return []
+    remaining, reset = quota_from_headers(fetched.headers)
+    # Absent headers mean unknown remaining, not a hardcoded free-tier sticker.
+    free_quota = remaining if remaining is not None else 0.0
     offers: list[ResourceOffer] = []
-    for item in payload.get("data") or []:
+    for item in fetched.body.get("data") or []:
         mid = str(item.get("id") or "")
         if not mid:
             continue
@@ -50,7 +52,10 @@ def _catalog(
                     provenance="provider_claim",
                 ),
                 capacity=Capacity(concurrency=concurrency, context_window=ctx_i),
-                economics=Economics(remaining_free_quota=free_quota),
+                economics=Economics(
+                    remaining_free_quota=free_quota,
+                    seconds_until_quota_reset=reset,
+                ),
                 telemetry=Telemetry(latency_p50_ms=latency_ms),
                 tools=("github", "*"),
                 source=url,
@@ -66,7 +71,6 @@ def discover_groq(*, api_key: str | None = None) -> list[ResourceOffer]:
         provider="groq",
         url=GROQ_MODELS,
         api_key=key,
-        free_quota=80_000.0,
         concurrency=20,
         latency_ms=280.0,
     )
@@ -78,7 +82,6 @@ def discover_cerebras(*, api_key: str | None = None) -> list[ResourceOffer]:
         provider="cerebras",
         url=CEREBRAS_MODELS,
         api_key=key,
-        free_quota=50_000.0,
         concurrency=20,
         latency_ms=190.0,
     )
