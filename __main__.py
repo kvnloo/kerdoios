@@ -54,14 +54,22 @@ def main(argv: list[str] | None = None) -> int:
     inv_p = sub.add_parser("inventory", help="Show resource inventory")
     inv_p.add_argument("--live", action="store_true", help="Also query live adapters (OpenRouter public, local, keyed Groq/Cerebras)")
     inv_p.add_argument("--no-fixture", action="store_true", help="Omit the deterministic fixture catalog")
-    inv_p.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
+    inv_p.add_argument(
+        "--free",
+        action="store_true",
+        help="Keep free models as the initial list (OpenRouter public/snapshot, plus keyed Groq/Cerebras free-tier; implies live, omits fixture)",
+    )
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
         item.add_argument("--fixture", action="store_true", default=True)
         item.add_argument("--live", action="store_true")
-        item.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
+        item.add_argument(
+            "--free",
+            action="store_true",
+            help="Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier; implies live, omits fixture)",
+        )
         item.add_argument("--workers", type=int, default=8)
         item.add_argument("--budget", type=float, default=None)
         item.add_argument("--mode", default="cheap", choices=[m.value for m in Mode])

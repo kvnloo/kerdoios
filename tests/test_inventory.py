@@ -7,10 +7,62 @@ from unittest.mock import patch
 from kerdoios.inventory import discover_all
 from kerdoios.providers.free import is_free
 from kerdoios.providers.openrouter import _offers_from_payload, discover as or_discover
-from kerdoios.providers.openai_compat import discover_groq
+from kerdoios.providers.openai_compat import discover_cerebras, discover_groq
 from kerdoios.types import Economics, Mode, WorkRequirement
 from kerdoios.optimize import plan
 from kerdoios.providers.fixture import fixture_offers
+
+
+# Catalog-shaped mocks only. CI must not need live Groq/Cerebras keys.
+_GROQ_MIXED = {
+    "data": [
+        {"id": "llama-3.3-70b-versatile", "context_window": 131072},
+        {"id": "vendor/custom:free", "context_window": 8192},
+        {
+            "id": "preview-zero",
+            "pricing": {"prompt": "0", "completion": "0"},
+            "context_window": 8192,
+        },
+        {"id": "whisper-large-v3", "context_window": 448},
+        {
+            "id": "enterprise-only",
+            "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+            "context_window": 128000,
+        },
+    ]
+}
+_CEREBRAS_MIXED = {
+    "data": [
+        {"id": "gpt-oss-120b", "owned_by": "Cerebras", "context_window": 65536},
+        {
+            "id": "dedicated-secret",
+            "pricing": {"prompt": "0.000002", "completion": "0.000004"},
+            "context_window": 131072,
+        },
+        {"id": "trial-flagged", "tier": "free_trial", "context_window": 65536},
+    ]
+}
+_OR_FREE = {
+    "data": [
+        {
+            "id": "meta/llama:free",
+            "context_length": 131072,
+            "pricing": {"prompt": "0", "completion": "0"},
+            "architecture": {"modality": "text"},
+            "supported_parameters": ["tools", "tool_choice"],
+        }
+    ]
+}
+
+
+def _catalog_json(url: str, api_key: str | None = None, **kwargs):
+    if "openrouter" in url:
+        return _OR_FREE
+    if "groq.com" in url:
+        return _GROQ_MIXED
+    if "cerebras" in url:
+        return _CEREBRAS_MIXED
+    return None
 
 
 class OpenRouterMapTests(unittest.TestCase):
@@ -52,6 +104,10 @@ class OpenRouterMapTests(unittest.TestCase):
     def test_groq_skips_without_key(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(discover_groq(api_key=None), [])
+
+    def test_cerebras_skips_without_key(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(discover_cerebras(api_key=None), [])
 
     def test_openrouter_tools_follow_supported_parameters(self) -> None:
         payload = {
@@ -141,6 +197,71 @@ class LiveMergeTests(unittest.TestCase):
         self.assertGreaterEqual(len(or_rows), 10)
         self.assertTrue(all(o.source == "openrouter:snapshot" for o in or_rows))
         self.assertFalse(any(o.source == "fixture" for o in rows))
+
+
+class KeyedFreeOverlayTests(unittest.TestCase):
+    """Keyed Groq/Cerebras free-tier overlays into --free; paid catalog rows do not."""
+
+    def _discover_free(self, **env: str):
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("kerdoios.providers.openrouter.get_json", side_effect=_catalog_json),
+            patch("kerdoios.providers.openai_compat.get_json", side_effect=_catalog_json),
+            patch("kerdoios.inventory.local.discover", return_value=[]),
+        ):
+            return discover_all(include_fixture=False, live=True, free_only=True)
+
+    def test_without_keys_free_has_no_groq_or_cerebras(self) -> None:
+        rows = self._discover_free()
+        origins = {o.provider for o in rows}
+        self.assertNotIn("groq", origins)
+        self.assertNotIn("cerebras", origins)
+        self.assertTrue(any(o.provider == "openrouter" for o in rows))
+
+    def test_keyed_free_tier_overlays_and_skips_paid_catalog_rows(self) -> None:
+        rows = self._discover_free(GROQ_API_KEY="g-test", CEREBRAS_API_KEY="c-test")
+        groq_models = {o.model for o in rows if o.provider == "groq"}
+        cerebras_models = {o.model for o in rows if o.provider == "cerebras"}
+        self.assertEqual(
+            groq_models,
+            {"llama-3.3-70b-versatile", "vendor/custom:free", "preview-zero"},
+        )
+        self.assertEqual(cerebras_models, {"gpt-oss-120b", "trial-flagged"})
+        self.assertTrue(any(o.provider == "openrouter" and o.model == "meta/llama:free" for o in rows))
+        keyed = [o for o in rows if o.provider in {"groq", "cerebras"}]
+        self.assertTrue(keyed)
+        self.assertTrue(all(o.economics.remaining_free_quota == 0 for o in keyed))
+        self.assertFalse(any(o.economics.remaining_free_quota in {80_000.0, 50_000.0} for o in keyed))
+
+    def test_snapshot_still_used_when_openrouter_live_empty_but_keys_set(self) -> None:
+        def _no_openrouter(url: str, api_key: str | None = None, **kwargs):
+            if "openrouter" in url:
+                return None
+            return _catalog_json(url, api_key=api_key, **kwargs)
+
+        with (
+            patch.dict("os.environ", {"GROQ_API_KEY": "g-test"}, clear=True),
+            patch("kerdoios.providers.openrouter.get_json", side_effect=_no_openrouter),
+            patch("kerdoios.providers.openai_compat.get_json", side_effect=_no_openrouter),
+            patch("kerdoios.inventory.local.discover", return_value=[]),
+        ):
+            rows = discover_all(include_fixture=False, live=True, free_only=True)
+        self.assertTrue(any(o.source == "openrouter:snapshot" for o in rows))
+        self.assertTrue(any(o.provider == "groq" and o.model == "llama-3.3-70b-versatile" for o in rows))
+        self.assertFalse(any(o.provider == "groq" and o.model == "whisper-large-v3" for o in rows))
+        self.assertFalse(any(o.source == "fixture" for o in rows))
+
+    def test_live_keeps_non_free_keyed_rows(self) -> None:
+        with (
+            patch.dict("os.environ", {"GROQ_API_KEY": "g-test"}, clear=True),
+            patch("kerdoios.providers.openrouter.get_json", side_effect=_catalog_json),
+            patch("kerdoios.providers.openai_compat.get_json", side_effect=_catalog_json),
+            patch("kerdoios.inventory.local.discover", return_value=[]),
+        ):
+            rows = discover_all(include_fixture=False, live=True, free_only=False)
+        groq_models = {o.model for o in rows if o.provider == "groq"}
+        self.assertIn("whisper-large-v3", groq_models)
+        self.assertIn("llama-3.3-70b-versatile", groq_models)
 
 
 class PrivateModeTests(unittest.TestCase):

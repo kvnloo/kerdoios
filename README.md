@@ -74,8 +74,10 @@ python3 -m kerdoios inventory --free
 `--free` queries OpenRouter's public `/models` catalog and keeps `:free` ids,
 $0/$0 prices, remaining quota/credits, and local endpoints. It does **not**
 mix the 7-row demo fixture. If the network is empty, Kerdoios loads
-`providers/openrouter_free.snapshot.json`. Groq/Cerebras stay env-gated
-(`GROQ_API_KEY` / `CEREBRAS_API_KEY`) and are skipped without a key.
+`providers/openrouter_free.snapshot.json`. When `GROQ_API_KEY` /
+`CEREBRAS_API_KEY` are set, keyed free-tier chat rows from those catalogs are
+overlaid onto that list; missing keys stay skipped. The snapshot is not a
+scraped Groq/Cerebras catalog.
 
 Live adapters without the free filter overlay the full OpenRouter catalog on
 the fixture:

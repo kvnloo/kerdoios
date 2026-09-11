@@ -9,13 +9,17 @@ from .providers.openai_compat import discover_cerebras, discover_groq
 from .types import ResourceOffer
 
 
-def collect_live() -> list[ResourceOffer]:
+def collect_live(*, free_only: bool = False) -> list[ResourceOffer]:
     live_rows: list[ResourceOffer] = []
     live_rows.extend(openrouter.discover())
-    live_rows.extend(discover_groq())
-    live_rows.extend(discover_cerebras())
+    live_rows.extend(discover_groq(free_only=free_only))
+    live_rows.extend(discover_cerebras(free_only=free_only))
     live_rows.extend(local.discover())
     return live_rows
+
+
+def _has_openrouter_catalog(offers: list[ResourceOffer]) -> bool:
+    return any(o.source.startswith("openrouter:") for o in offers)
 
 
 def _merge(base: list[ResourceOffer], live_rows: list[ResourceOffer]) -> list[ResourceOffer]:
@@ -34,9 +38,10 @@ def discover_all(
 ) -> list[ResourceOffer]:
     live_rows: list[ResourceOffer] = []
     if live or free_only:
-        live_rows = collect_live()
-    if free_only and not live_rows:
-        live_rows = openrouter.discover_snapshot()
+        live_rows = collect_live(free_only=free_only)
+    if free_only and not _has_openrouter_catalog(live_rows):
+        # Keyed Groq/Cerebras must overlay the OpenRouter seed, not replace it.
+        live_rows = openrouter.discover_snapshot() + live_rows
     offers = fixture_offers() if include_fixture else []
     offers = _merge(offers, live_rows)
     if free_only:
