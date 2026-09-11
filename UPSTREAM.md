@@ -60,6 +60,8 @@ the first PR. Isolated scope, one mocked test, `make lint`.
 - Portfolio split across offers for `parallelism = N`
 - Later: GPU / VM / Mesh offers LiteLLM will never model
 
-Hermes should eventually **execute through LiteLLM** (or an
-OpenAI-compatible proxy). Kerdoios should **plan**, then hand placements
-back. Do not grow a second 100-provider SDK here.
+Kerdoios returns `ExecutionPlan`. Hermes executes the plan (through
+LiteLLM or an OpenAI-compatible proxy). Commodity routing belongs in
+LiteLLM ([quota pools #31823](https://github.com/BerriAI/litellm/issues/31823)).
+Do not add an execute CLI, vendor LiteLLM, or grow a second 100-provider
+SDK here.

@@ -1,12 +1,14 @@
 # Kerdoios roadmap
 
-Kerdoios plans portfolios. Hermes executes. LiteLLM owns commodity routing.
+Kerdoios returns ExecutionPlan. Hermes executes. Commodity routing belongs in LiteLLM.
+
+**Execute:** Hermes (or LiteLLM) runs the plan. Do not add an execute CLI here.
 
 **Done:** types, hard filters, perishable quota scoring, Pareto + N-worker allocate, mode presets, CLI, Hermes tools, 7-row fixture, live adapters, free-first OpenRouter seed.
 
 **In progress:** inventory every provider/model; keep free as the initial list. OpenRouter is the aggregator. Groq/Cerebras free tiers need keys.
 
-**Not done:** persist inventory, live remaining-quota headers, execution receipts, AODL schema ingest, GPU/VM/mesh, execute-through-LiteLLM, pyproject.toml, unit CI, mutation.
+**Not done:** persist inventory, live remaining-quota headers, execution receipts, AODL schema ingest, GPU/VM/mesh, pyproject.toml, unit CI, mutation.
 
 **Trap:** LiteLLM `input_cost_per_token == 0` is missing price / rerank / embedding, not a usable free chat tier. `--free` must not ingest that dump. Contribute pricing-table fixes upstream; do not grow a second gateway here.
 
