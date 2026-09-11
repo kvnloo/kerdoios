@@ -14,18 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # AGENTS.md unit layer is:
-          #   python3 -m unittest tests.test_optimize tests.test_inventory
-          # origin/main has types.py at the plugin cwd, which shadows stdlib
-          # `types` when python -m is launched from that directory (issue #3).
-          # Tests already import as kerdoios.* after inserting the checkout
-          # parent on sys.path. Checking out into a directory named kerdoios
-          # and running from its parent is the working layout for origin/main
-          # without extra pip deps. After pyproject lands, this path can
-          # collapse to the literal AGENTS.md command from the plugin cwd.
-          path: kerdoios
 
       - name: Unit tests
-        working-directory: ${{ github.workspace }}
-        run: python3 -m unittest kerdoios.tests.test_optimize kerdoios.tests.test_inventory
+        run: python3 -m unittest discover -s tests

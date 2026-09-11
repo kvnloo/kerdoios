@@ -4,8 +4,8 @@ from .optimize import plan as build_plan
 from .types import ExecutionPlan, ResourceOffer, WorkRequirement
 
 
-def explain(offers: list[ResourceOffer], req: WorkRequirement, built: ExecutionPlan | None = None) -> str:
-    result = built or build_plan(offers, req)
+def explain(offers: list[ResourceOffer], req: WorkRequirement, built: ExecutionPlan | None = None, *, use_observed: bool = False) -> str:
+    result = built or build_plan(offers, req, use_observed=use_observed)
     lines = [
         f"Kerdoios plan  mode={result.mode}  cost=${result.estimated_cost:.4f}  "
         f"workers={sum(p.workers for p in result.placements)}/{req.parallelism}  "
