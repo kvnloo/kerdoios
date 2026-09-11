@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from .base import ResourceProvider
+
+
+def fixture_offers() -> list[ResourceOffer]:
+    """Deterministic inventory for tests and offline demos. No network."""
+    return [
+        ResourceOffer(
+            id="groq/free-70b",
+            provider="groq",
+            resource_type="llm",
+            model="llama-3.3-70b",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.72, coding=0.70, tool_use=0.9, provenance="fixture"),
+            capacity=Capacity(concurrency=20, context_window=128_000),
+            economics=Economics(remaining_free_quota=80_000, seconds_until_quota_reset=36_000),
+            telemetry=Telemetry(latency_p50_ms=280, failure_rate=0.03, availability=0.99),
+            tools=("github", "*"),
+            source="fixture",
+            confidence=0.7,
+        ),
+        ResourceOffer(
+            id="cerebras/free-coder",
+            provider="cerebras",
+            resource_type="llm",
+            model="qwen-coder",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.68, coding=0.78, tool_use=0.85, provenance="fixture"),
+            capacity=Capacity(concurrency=20, context_window=128_000),
+            economics=Economics(remaining_free_quota=50_000, seconds_until_quota_reset=86_400),
+            telemetry=Telemetry(latency_p50_ms=190, failure_rate=0.04, availability=0.98),
+            tools=("github", "*"),
+            source="fixture",
+            confidence=0.65,
+        ),
+        ResourceOffer(
+            id="openrouter/free",
+            provider="openrouter",
+            resource_type="llm",
+            model="free-pool",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.66, coding=0.70, tool_use=0.8, provenance="fixture"),
+            capacity=Capacity(concurrency=30, context_window=128_000),
+            economics=Economics(remaining_free_quota=120_000, seconds_until_credits_expire=172_800),
+            telemetry=Telemetry(latency_p50_ms=900, failure_rate=0.08, availability=0.96),
+            tools=("github", "*"),
+            source="fixture",
+            confidence=0.55,
+        ),
+        ResourceOffer(
+            id="local/qwen-32b",
+            provider="local",
+            resource_type="llm",
+            model="qwen-32b",
+            local=True,
+            capabilities=CapabilityProfile(reasoning=0.74, coding=0.76, tool_use=0.88, provenance="fixture"),
+            capacity=Capacity(concurrency=4, context_window=128_000),
+            economics=Economics(),  # electricity ignored in MVP; marginal $0
+            telemetry=Telemetry(latency_p50_ms=1200, failure_rate=0.01, availability=0.995),
+            tools=("github", "*"),
+            privacy_ok=("public", "confidential", "local_only"),
+            source="fixture",
+            confidence=0.8,
+        ),
+        ResourceOffer(
+            id="nous/hermes-70b",
+            provider="nous-portal",
+            resource_type="llm",
+            model="hermes-4-70b",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.8, coding=0.78, tool_use=0.92, provenance="fixture"),
+            capacity=Capacity(concurrency=8, context_window=128_000),
+            economics=Economics(remaining_credits=5.0, seconds_until_credits_expire=604_800),
+            telemetry=Telemetry(latency_p50_ms=450, failure_rate=0.02, availability=0.99),
+            tools=("github", "*"),
+            source="fixture",
+            confidence=0.75,
+        ),
+        ResourceOffer(
+            id="frontier/paid",
+            provider="paid-api",
+            resource_type="llm",
+            model="frontier-codex",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.93, coding=0.94, tool_use=0.97, provenance="fixture"),
+            capacity=Capacity(concurrency=50, context_window=200_000),
+            economics=Economics(input_token_price=3e-6, output_token_price=1.2e-5),
+            telemetry=Telemetry(latency_p50_ms=520, failure_rate=0.01, availability=0.995),
+            tools=("github", "*"),
+            source="fixture",
+            confidence=0.9,
+        ),
+        ResourceOffer(
+            id="tiny/8k-no-tools",
+            provider="openrouter",
+            resource_type="llm",
+            model="tiny-8k",
+            local=False,
+            capabilities=CapabilityProfile(reasoning=0.4, coding=0.35, tool_use=0.1, provenance="fixture"),
+            capacity=Capacity(concurrency=100, context_window=8192),
+            economics=Economics(),
+            telemetry=Telemetry(latency_p50_ms=200, failure_rate=0.05, availability=0.9),
+            tools=(),
+            source="fixture",
+            confidence=0.4,
+        ),
+    ]
+
+
+class FixtureProvider(ResourceProvider):
+    name = "fixture"
+
+    def discover(self) -> list[ResourceOffer]:
+        return fixture_offers()

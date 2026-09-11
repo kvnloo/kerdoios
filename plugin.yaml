@@ -1,0 +1,21 @@
+name: kerdoios
+version: 0.1.0
+description: Hermes Kerdoios — allot scarce compute so the work can become real
+manifest_version: 2
+api_version: 1
+license: MIT
+homepage: https://github.com/kvnloo/kerdoios
+tags: [cost, routing, compute, pareto, hermes]
+provides_tools:
+  - kerdoios_plan
+  - kerdoios_explain
+provides_hooks: []
+config_schema:
+  default_mode:
+    type: str
+    default: balanced
+    description: Preset FREE|CHEAP|BALANCED|FAST|MAX|SCALE|PRIVATE
+  maximum_paid_usd:
+    type: float
+    default: 0.0
+    description: Hard cap on paid spend for a plan when the work requirement omits budget
