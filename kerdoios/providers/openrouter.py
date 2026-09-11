@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
-from .base import ResourceProvider
 from .http import get_json_response, quota_from_headers
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
@@ -114,10 +113,3 @@ def discover_snapshot() -> list[ResourceOffer]:
     except (OSError, json.JSONDecodeError):
         return []
     return [replace(o, source="openrouter:snapshot", confidence=0.55) for o in _offers_from_payload(payload)]
-
-
-class OpenRouterProvider(ResourceProvider):
-    name = "openrouter"
-
-    def discover(self) -> list[ResourceOffer]:
-        return discover()

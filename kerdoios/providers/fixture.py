@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
-from .base import ResourceProvider
 
 
 def fixture_offers() -> list[ResourceOffer]:
@@ -107,10 +106,3 @@ def fixture_offers() -> list[ResourceOffer]:
             confidence=0.4,
         ),
     ]
-
-
-class FixtureProvider(ResourceProvider):
-    name = "fixture"
-
-    def discover(self) -> list[ResourceOffer]:
-        return fixture_offers()

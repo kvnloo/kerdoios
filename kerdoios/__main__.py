@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 
 from .explain import explain
 from .inventory import discover_all
@@ -59,7 +58,6 @@ def main(argv: list[str] | None = None) -> int:
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
-        item.add_argument("--fixture", action="store_true", default=True)
         item.add_argument("--live", action="store_true")
         item.add_argument(
             "--free",

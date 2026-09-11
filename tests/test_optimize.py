@@ -64,13 +64,8 @@ class PlanTests(unittest.TestCase):
         self.assertGreaterEqual(len(built.placements), 3)
         self.assertTrue({"groq", "openrouter", "local"} & providers)
         self.assertLessEqual(built.estimated_cost, 0.50 + 1e-9)
-        naive_paid = next(p.estimated_cost / p.workers for p in built.placements if p.provider == "paid-api") if any(
-            p.provider == "paid-api" for p in built.placements
-        ) else 0.0
-        # fixture paid unit cost is tiny; the point is the plan is a portfolio not a single endpoint
         self.assertNotEqual(len(providers), 1, msg=json.dumps(built.to_dict(), indent=2))
         self.assertLess(built.unplaced_workers, 25)
-        _ = naive_paid
 
     def test_free_mode_skips_paid_api(self) -> None:
         req = WorkRequirement(

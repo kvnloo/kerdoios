@@ -63,7 +63,7 @@ def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
         return ResourceOffer(
             id=str(raw["id"]),
             provider=str(raw["provider"]),
-            resource_type=raw.get("resource_type") or "llm",  # type: ignore[arg-type]
+            resource_type=raw.get("resource_type") or "llm",  # type: ignore[arg-type]  # catalog json is untyped; default to llm
             model=str(model) if model is not None else None,
             local=bool(raw.get("local")),
             capabilities=CapabilityProfile(**caps_raw),

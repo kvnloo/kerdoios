@@ -54,7 +54,7 @@ class PackagingTests(unittest.TestCase):
         ns_name = "_kerdoios_hermes_ns_test"
         module_name = f"{ns_name}.plugin"
         ns = stdlib_types.ModuleType(ns_name)
-        ns.__path__ = []  # type: ignore[attr-defined]
+        ns.__path__ = []  # type: ignore[attr-defined]  # ModuleType has no __path__ until we fake a package
         sys.modules[ns_name] = ns
 
         def _cleanup() -> None:
@@ -71,7 +71,7 @@ class PackagingTests(unittest.TestCase):
         assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         module.__package__ = module_name
-        module.__path__ = [str(ROOT)]  # type: ignore[attr-defined]
+        module.__path__ = [str(ROOT)]  # type: ignore[attr-defined]  # ModuleType has no __path__ until we fake a package
         sys.modules[module_name] = module
         spec.loader.exec_module(module)
         self.assertTrue(callable(module.register))

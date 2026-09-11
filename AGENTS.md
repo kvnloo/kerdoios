@@ -50,6 +50,17 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 4. If mutation is not `n/a`, run it on the contract you changed. A surviving mutant is a missing assertion.
 5. Open a PR. Fill `.github/PULL_REQUEST_TEMPLATE.md`. Never merge.
 
+## Anti-slop
+
+- `is_free` / catalog ingest: missing/None/default-0 price is unknown, not free; never inp or 0.0; never invent remaining_free_quota; LiteLLM input_cost_per_token == 0 is missing, not a free tier. (enforced by #11)
+- `# noqa` and `type: ignore[...]` require a same-line why; otherwise delete.
+- Comments say WHY; delete a comment that restates the next statement.
+- No second process file: do not add WORKERS.md or retell the claim loop outside AGENTS.md.
+- PR template mutation default is `n/a`, never `mutmut run`, until a mutator is installed.
+- No CLI flag, plugin.yaml provides_tools entry, or config_schema key the runtime does not read.
+- Tests must fail if the behavior is inverted: no assert CONST == CONST, no `_ = unused`.
+- Do not describe a feature the tree does not have in tool schemas, README, or PR evidence.
+
 ## Do not
 
 - Commit secrets, tokens, `.env`, or pairing files.

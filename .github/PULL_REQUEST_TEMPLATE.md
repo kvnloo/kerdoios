@@ -24,7 +24,7 @@ tests:
   red:
   green:
   sabotage:
-mutation: mutmut run
+mutation: n/a
 runtime_evidence: []
 limitations: []
 ai_assistance:
