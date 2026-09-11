@@ -2,96 +2,217 @@
 
 **Find the advantage.**
 
-This is the canonical story, cosmology, and visual world for Kerdoios. The plugin README retells the short form. This file is the source.
+This is the canonical story, cosmology, and visual world for Kerdoios. The [README](../README.md) is what a developer needs to run the software. Do not reprint these slogans on every page; they work because they are rare.
+
+The plugin is named for Kerdoios (Κερδῷος), an epithet of Hermes associated with gain and advantage. Lucius Annaeus Cornutus, *Greek Theology* §25: Hermes is called Kerdoios because reason alone is the cause of *true* gain. The broader idea of *kerdos* is gain, advantage, cleverness, and recognizing an opportunity others overlook.
+
+That maps onto the software. The world already contains enormous amounts of fragmented compute. Most systems see incompatible, individually constrained resources. Kerdoios sees opportunity. Given work and a set of constraints, it finds an advantageous path through the resources available to it.
+
+It does not create the water. It does not execute the work. Hermes still orchestrates, verifies, and retries. Kerdoios only answers: given this work, these offers, and these constraints, **what portfolio should run?**
 
 <p align="center">
-  <img alt="The shrine of Kerdoios from the dock. A red banner bears the convergence glyph. Boats wait on still water while the mountain holds the gate." src="art/shrine-from-the-dock.png" width="100%">
+  <img alt="A dock at the Shrine of Kerdoios. A red banner bears the convergence glyph; waterways meet at the mountain." src="art/shrine-from-the-dock.png" width="100%">
 </p>
 
 ## Premise
 
-Kerdoios (Κερδῷος) is Hermes' cult epithet *of gain* — gain as advantage, not as scraping.
+KERDOIOS is the intelligence that finds abundance inside scarcity.
 
-Lucius Annaeus Cornutus, *Greek Theology* §25: Hermes is called Kerdoios because reason alone is the cause of *true* gain. The plugin is named for that epithet. It is not named for credits, coupons, or a billing sidecar.
+The world contains enormous amounts of fragmented compute: free API quotas, idle local GPUs, inexpensive cloud machines, promotional credits, rate-limited inference, specialized accelerators, cheap models, and expensive frontier models.
 
-The world already has more computational power than any one river — any one provider, GPU, or paid endpoint — can show at a glance. The power is not missing. It is scattered: free quotas, idle local wheels, promotional credits, rate-limited inference, cheap models, expensive frontier gates. Most systems treat those as incompatible scraps. Kerdoios notices them, connects them, and allots a **portfolio** when that is the advantageous route.
+Most systems see incompatible, individually constrained resources.
 
-It does not create the water. It does not execute the work. Hermes still orchestrates, verifies, and retries. Kerdoios only answers: given this work, these offers, and these constraints, **what portfolio should run?**
+Kerdoios sees opportunity.
 
 ## The Rivers
 
-The Rivers are every current that can be discovered, filtered, and combined.
+Long before anyone remembers, the world was crossed by the Rivers — immense currents of power flowing through mountains, beneath oceans, and between cities.
 
-They are not one ocean owned by a single power. They are thousands of insignificant flows: a spring that resets at midnight, a private mill on a local wheel, a borrowed canal that expires at the end of the month, a locked reservoir that opens only if you pay the gate. Alone, none of them is enough. Together, for a night, they can be.
+Civilizations learned to draw from them.
 
-Kerdoios walked the mountains looking for a greater source and did not find one. He reopened forgotten aqueducts, redirected abandoned streams, restored old wells, borrowed excess flow, and released reservoirs only when the work actually required them.
+Then they became obsessed with possessing them.
 
-That is the whole method.
+Kings dammed rivers. Temples guarded springs. Merchant houses sold access to reservoirs. Great machines were constructed around the largest sources of power, while thousands of smaller streams were abandoned because individually they seemed worthless.
+
+Eventually the world came to believe that power itself had become scarce.
+
+They were wrong.
 
 ## The shrine
 
-The shrine sits where the waterways meet the mountain. Foreground water. A waterwheel. Stone channels. A gate carved with the convergence glyph. On the inner wall:
+At the edge of the known world stood a ruined shrine to a forgotten god.
 
-**POWER WAS NEVER SCARCE. ONLY SCATTERED.**
+Above its entrance was carved a single word:
 
-The dock below is working architecture, not a temple for tourists. Boats. Chains. A red banner with the same glyph. Torchlight on wet stone. The mountain in the distance is the same place seen from the water.
+**ΚΕΡΔΟΙΟΣ**
 
-The two stills in `docs/art/` are original art for this project:
+Kerdoios was not the god who created power.
 
-- `art/shrine-the-scattered-rivers.png` — the mountain gate from the water, inscription and glyph on the stone, waterwheel to the side.
-- `art/shrine-from-the-dock.png` — the approach: dock, boats, red banner, the shrine across the lake.
+He was the god who noticed what others overlooked.
+
+Where a king saw a trickle too small to exploit, Kerdoios saw a tributary.
+
+Where merchants saw an exhausted reservoir, he noticed that it filled again every dawn.
+
+Where engineers saw a machine too weak for their work, he saw one piece of a larger machine.
+
+Where everyone else saw scarcity, Kerdoios saw paths.
+
+His gift was not strength.
+
+It was advantage.
+
+His followers therefore did something the great kingdoms considered absurd.
+
+They collected almost nothing.
+
+Instead, they connected everything.
+
+The canonical location is the Shrine of Kerdoios: a colossal ancient structure embedded into a mountain and surrounded by an enormous body of water. Dozens or hundreds of small waterways converge toward it. At the beginning of the story the shrine appears abandoned. Then something changes. Deep within the mountain, ancient machinery begins moving again. A faint warm light appears inside the convergence glyph. Water begins to flow. That motion is the narrative metaphor for this repository coming online.
+
+The two stills in `docs/art/` are original art for this project, not copyrighted game assets:
+
+- `art/shrine-the-scattered-rivers.png` — the mountain gate from the water. The stone reads: POWER WAS NEVER SCARCE. ONLY SCATTERED.
+- `art/shrine-from-the-dock.png` — the approach: dock, boats, red banner with the convergence glyph, the shrine across the lake.
 
 ## The First Convergence
 
-### I. The city and the one river
+The central legend of Kerdoios concerns a city that required more power than any known river could provide.
 
-A city once needed more power than any known river could give. The obvious answer was a greater source: a bigger river, a deeper well, a sea of one's own. There was no such source. The landscape was already wet. The water was just in the wrong places, in the wrong sizes, at the wrong times.
+Its rulers demanded that a greater source be found.
 
-### II. The walk
+Kerdoios found none.
 
-Kerdoios found no greater source. He walked into the mountains.
+Instead, he walked into the mountains.
 
-He did not invent water. He read the ground. Forgotten aqueducts still held a channel. Abandoned streams still ran if you cleared the stone. Old wells still answered. Excess flow sat unused behind other people's gates. Reservoirs existed that no one wanted to open until the work was real.
+He reopened forgotten aqueducts.
 
-### III. The gathering
+He redirected abandoned streams.
 
-For days, thousands of insignificant currents moved across the landscape. None of them looked like an ocean. That was the point. A planner who will only accept a sea will wait forever. A planner who can allot small springs, private wheels, and paid gates together can work tonight.
+He restored old wells.
 
-### IV. The night
+He borrowed excess flow from distant settlements.
 
-Then the water rose. Streams became rivers. Rivers became a torrent.
+He released reservoirs only when their power was actually required.
 
-For one night the city possessed **the strength of an ocean without owning a single sea.**
+For days, thousands of insignificant currents began moving across the landscape.
 
-That night is called the First Convergence.
+At first nobody understood what he was doing.
 
-### V. After
+Then the water began to rise.
 
-The shrine marks the meeting, not the ownership. The glyph is the diagram of that night: many channels, one cut, no single sea. The Fates were already there. They did not arrive with the flood.
+Streams became rivers.
 
-## Metaphor
+Rivers became a torrent.
 
-| Lore | Compute |
+And for one night:
+
+**The city possessed the strength of an ocean without owning a single sea.**
+
+This became known as:
+
+**THE FIRST CONVERGENCE**
+
+Centuries later, the shrine stands empty.
+
+Kerdoios is gone.
+
+But beneath the mountain, the machinery has begun to move again.
+
+## Releases as chapters
+
+Where tasteful, releases can advance the mythology. Do **not** force semantic versions to use these names. They are a storytelling system for major milestones.
+
+| Chapter | When it fits |
 | --- | --- |
-| The Rivers | Heterogeneous compute that can be discovered: free quota, local inference, credits, cheap models, frontier endpoints |
-| A spring that resets | Perishable free quota |
-| A private waterwheel | Local inference (`local_only`, on-device, `:11434` / `:1234`) |
-| Borrowed excess flow | Promotional credits, leftover capacity |
-| Reservoir gates | Paid overflow; expensive frontier models |
+| **The Shrine Awakens** | Early development. One stream begins moving. |
+| **The Tributaries** | Resource discovery. Previously disconnected sources become visible. |
+| **The Convergence** | Increasing orchestration. The valley begins flowing as one system. |
+| **The Ocean Without a Sea** | A future major milestone: fragmented resources combine into capability far beyond any individual source. |
+
+## The rivers are compute
+
+The mythology is an abstraction of the architecture. Do not force these mappings into user-facing prose. They are a design system for storytelling, diagrams, release artwork, and documentation.
+
+Water is compute. Kerdoios does not create the water. It discovers it, routes it, combines it, and uses it when that is most advantageous. The physical world should behave like an architectural diagram without explicitly looking like one.
+
+| In the valley | In the software |
+| --- | --- |
+| Water | Compute |
+| Small springs | Free quotas |
+| Reservoirs | Cloud capacity |
+| A private waterwheel | Local compute |
+| Width of a channel | Throughput / rate limits |
+| Distance | Latency |
+| Opening an expensive reservoir gate | Paid overflow |
+| Different waterways | Different qualities, capacities, costs, destinations |
 | The walk into the mountains | Inventory: notice what others overlook |
 | Hard rock that will not yield | Ananke: privacy, context, tools — price cannot buy a pass |
 | The portion | Lachesis / Kerdoios: the portfolio of N workers |
-| The cut | Atropos: budget and quota stop; the plan must not continue after the portion is spent |
+| The cut | Atropos: budget and quota stop |
 | The work itself | Clotho / Hermes: create, execute, verify, retry |
 | The First Convergence | A portfolio that is enough **together** without owning one provider |
-| The shrine | This plugin's brand: the meeting place, not a second gateway |
-| The city | The workload that needed more than one river |
+| The shrine | This plugin: the meeting place, not a second gateway |
 
-Small springs, private waterwheels, and expensive reservoir gates are the same diagram: free quota, local inference, and paid overflow. Kerdoios allots the portion. Hermes spends it. The budget is the cut.
+Thousands of individually weak resources can collectively accomplish something none could accomplish alone.
+
+## Philosophy
+
+Kerdoios is **not** fundamentally a cheap-compute project. Cost is one dimension of advantage.
+
+Depending on the task, the advantageous route might optimize for cost, capability, latency, throughput, privacy, reliability, scalability, available capacity, or some combination.
+
+The larger idea: **find the advantageous allocation under constraints.**
+
+That distinction matters because the brand can later extend beyond LLM API routing into GPUs, agents, machines, storage, bandwidth, energy, or other scarce computational resources without breaking. The MVP in this repository is still LLM placement. Do not describe unbuilt surfaces as if they shipped. See [ROADMAP.md](../ROADMAP.md).
+
+1. **Advantage, not profit-max.** Cornutus: reason is the cause of true gain. A cheap plan that fails the work is not gain. A private plan that leaks is not gain. A fast plan that blows the cut is not gain.
+2. **Portfolio, not a single endpoint.** Kerdoios is not an LLM router. It builds an execution portfolio.
+3. **Do not create the water.** Do not grow a second LLM gateway. Commodity routing belongs upstream (LiteLLM). Kerdoios notices, filters, allots.
+4. **Scattered is the default.** Missing, `None`, or default-0 catalog prices are unknown, not free. A zero in someone else's table is not a spring.
+5. **The cut is real.** When the portion is spent, the plan stops.
+6. **Ananke is not for sale.** `local_only` stays local. Context and tools are gates, not suggestions.
+
+## Canonical phrases
+
+Use sparingly. Their power comes from repetition at meaningful moments, not from covering every page.
+
+- **Find the advantage.**
+- **POWER WAS NEVER SCARCE. ONLY SCATTERED.**
+- **THE STRENGTH OF AN OCEAN WITHOUT OWNING A SINGLE SEA.**
+- They collected almost nothing. Instead, they connected everything.
+- **The rivers are compute.**
+- Kerdoios allots the portion. Hermes spends it. The budget is the cut.
+- Hermes executes. Kerdoios does not.
+- It does not create the water.
+
+## Visual world
+
+Kerdoios should feel like a frame captured from an extremely high-end dark mythological AAA game, not like a SaaS website decorated with Greek imagery.
+
+The canonical environment is a vast ancient water civilization: enormous valleys, fjords, waterways, waterfalls, aqueducts, wet stone, ancient machinery, mountains, monumental architecture, mist, clouds, subtle vegetation, physically realistic water, volumetric sunlight, weathered metals, and structures whose scale makes a human feel insignificant.
+
+The camera often sits close to the surface of the water. Tiny waterways should visibly converge toward something enormous. Ancient infrastructure should suggest that this civilization understood routing, flow, and allocation at an almost supernatural level.
+
+Avoid generic cyberpunk imagery. Avoid obvious GPUs, server racks, floating dashboards, neon AI brains, generic circuit boards, or literal cloud-computing icons in primary brand artwork. Express the technology through the mythology.
+
+Original stills for this project live in `docs/art/`. Do not replace them with another franchise's screenshots, concept-art rips, or a screenshot of a prompt.
+
+## Glyph
+
+Do **not** default to a caduceus as the primary logo.
+
+The primary Kerdoios symbol is an original ancient-looking convergence glyph. Its conceptual geometry is:
+
+**multiple sources → intelligent convergence → one directed output.**
+
+It should be simple enough to recognize at GitHub-avatar size but look plausible carved into a monumental stone gate. Within the fictional world, this symbol marks infrastructure touched by Kerdoios. It can appear on gates, aqueducts, reservoirs, machinery, banners, coins, architecture, documentation, and eventually the software itself.
+
+The red banners in the shrine stills carry that mark. The carved ring on the mountain gate is the same idea in stone.
 
 ## The Fates (already in the code)
 
-The plugin encodes a cosmology that was named before this file existed. Do not rename the product after a Fate. Do not invent extra gods.
+The plugin encodes a smaller cosmology that existed before this file. Do not rename the product after a Fate. Do not invent extra gods.
 
 | Name | Role among the gods | In Kerdoios |
 | --- | --- | --- |
@@ -102,50 +223,7 @@ The plugin encodes a cosmology that was named before this file existed. Do not r
 
 Lachesis is the *function* (measure the portion). Kerdoios is the *name*. The code path is inventory → hard-filter (Ananke) → effective cost and perishable quota → Pareto set → portfolio of N workers → `ExecutionPlan`. Hermes executes. Kerdoios does not.
 
-Modes today are how the portion is measured, not new mythic beings: `FREE`, `CHEAP`, `BALANCED`, `FAST`, `MAX`, `SCALE`, `PRIVATE`. Cost is one dimension of advantage. Depending on the task, the advantageous route might optimize for cost, capability, latency, throughput, privacy, reliability, available capacity, or some combination.
-
-## Philosophy
-
-1. **Advantage, not profit-max.** Cornutus: reason is the cause of true gain. A cheap plan that fails the work is not gain. A private plan that leaks is not gain. A fast plan that blows the cut is not gain.
-2. **Portfolio, not a single endpoint.** Kerdoios is not an LLM router. It builds an execution portfolio.
-3. **Do not create the water.** Do not grow a second LLM gateway. Commodity routing belongs upstream (LiteLLM). Kerdoios notices, filters, allots.
-4. **Scattered is the default.** Missing, `None`, or default-0 catalog prices are unknown, not free. A zero in someone else's table is not a spring.
-5. **The cut is real.** Atropos is not a metaphor you can skip in software. When the portion is spent, the plan stops.
-6. **Ananke is not for sale.** `local_only` stays local. Context and tools are gates, not suggestions.
-
-## Phrases
-
-These are canonical. Prefer them to new slogans.
-
-- **Find the advantage.**
-- **POWER WAS NEVER SCARCE. ONLY SCATTERED.**
-- **The rivers are compute.**
-- **The strength of an ocean without owning a single sea.**
-- **The First Convergence.**
-- **Kerdoios allots the portion. Hermes spends it. The budget is the cut.**
-- **Hermes executes. Kerdoios does not.**
-- **It does not create the water.**
-- **Small springs, private waterwheels, and expensive reservoir gates.**
-
-## Visual world
-
-High-end shrine stills. Stone, water, mist, working machinery.
-
-- Always water in the foreground or the approach.
-- Mountain architecture where many falls meet a gate — not a generic castle, not a generic temple.
-- A waterwheel is a private mill: local power, visible, owned, limited.
-- Red banners on the dock. Torchlight. Boats. Chains. Wet stone.
-- Golden hour or storm-light; the air is wet.
-- The inscription is carved, not typeset in the sky.
-- The glyph is stone or cloth, never a UI icon slapped on the landscape.
-
-Original stills for this project live in `docs/art/`. Do not replace them with another franchise's screenshots, concept-art rips, or a screenshot of a prompt.
-
-## The glyph
-
-The convergence glyph is a ring where several channels meet. Crossing strokes inside a circle: many currents, one cut, no single sea.
-
-It is carved on the mountain gate and flown on the dock banner. It marks a meeting of flows, not ownership of an ocean. Use it as a stone or cloth mark. Do not turn it into a provider logo or a routing-flowchart mascot.
+Modes today are how the portion is measured, not new mythic beings: `FREE`, `CHEAP`, `BALANCED`, `FAST`, `MAX`, `SCALE`, `PRIVATE`.
 
 ## Name: keep, and keep rejected
 
@@ -161,8 +239,22 @@ Do not resurrect a rejected product name. Clotho, Lachesis, Atropos, and Ananke 
 
 ## Tone
 
-Mythic, specific, short. Cornutus is allowed. Purple fog is not.
+The lore should feel ancient, restrained, mysterious, and serious. Do not turn the repository into fantasy roleplay. Technical users should still immediately understand what Kerdoios actually does. Use mythology to make the project memorable, then transition into concrete engineering.
 
-Write as if the shrine is a working mill at the meeting of rivers: wet stone, a real cut, a city that needed power. Then say the mapping in one line. Do not invent shipped features to decorate the myth. Do not retell `AGENTS.md`. Do not add a second process file.
+The story we are telling:
+
+The world believed it needed more power.
+
+Kerdoios discovered that enormous power already existed.
+
+It was simply fragmented.
+
+The solution was not possession.
+
+It was orchestration.
+
+Power was never scarce.
+
+Only scattered.
 
 Workers open PRs. They never merge `main`.

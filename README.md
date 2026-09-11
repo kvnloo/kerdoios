@@ -38,9 +38,13 @@ The world is already crossed by free quotas, idle local GPUs, promotional credit
 
 ## Upstream first
 
-Do not grow a second LLM gateway here. Commodity routing, spend tracking, and 100+ provider adapters belong in [LiteLLM](https://github.com/BerriAI/litellm). See [UPSTREAM.md](UPSTREAM.md). Kerdoios keeps the Hermes/AODL **portfolio** planner (N workers, perishable quota, privacy hard-filter). Hermes still executes.
+Do not grow a second LLM gateway here. The popular OSS project that already routes by cost, tracks spend, and speaks 100+ providers is [LiteLLM](https://github.com/BerriAI/litellm). See [UPSTREAM.md](UPSTREAM.md): small LiteLLM PRs first, then a slice of [quota pools #31823](https://github.com/BerriAI/litellm/issues/31823). Kerdoios keeps the Hermes/AODL **portfolio** planner (N workers, perishable quota, privacy hard-filter). Hermes still executes.
 
-Install into `~/.hermes/plugins/kerdoios/`. Do **not** PR this into `NousResearch/hermes-agent`.
+Closest-looking repos that are *not* popular enough to join instead: `ypollak2/llm-router` (78★) and `malda231125/free-llm-gateway` (7★). Steal ideas; do not fork them.
+
+## Not Hermes core
+
+Install into `~/.hermes/plugins/kerdoios/`. Do **not** PR this into `NousResearch/hermes-agent`. Vendor/compute plugins stay standalone. AODL remains the typed work spec; Kerdoios consumes a `WorkRequirement` JSON and returns an `ExecutionPlan` JSON.
 
 ## Install
 
@@ -50,7 +54,7 @@ hermes plugins doctor ~/.hermes/plugins/kerdoios --ci
 hermes plugins enable kerdoios
 ```
 
-`plugin.yaml` stays at the plugin root so Hermes can load the directory. The importable package is `kerdoios/` (plus `pyproject.toml`). Optional editable install from any folder name:
+`plugin.yaml` stays at the plugin root so Hermes can load the directory. The importable package is `kerdoios/` (plus `pyproject.toml`), so a checkout does not need to be named `kerdoios` and plugin cwd does not shadow stdlib `types`. Optional editable install from any folder name:
 
 ```bash
 pip install -e .
