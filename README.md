@@ -87,7 +87,16 @@ python3 -m kerdoios inventory
 python3 -m kerdoios inventory --live
 python3 -m kerdoios plan --workers 100 --context 128000 --budget 0.50 --mode cheap
 python3 -m kerdoios explain --workers 100 --budget 0.50
+python3 -m kerdoios bench
 ```
+
+`python3 -m kerdoios bench` replays `plan()` on the frozen catalog and task suite in `tests/fixtures/bench/`. No keys, no POST. Token spend is first-class (free quota and local are $0 and still count). Do not regenerate those fixtures with a live LLM. `--live` adds ex-post quality vs Astra `task_type=baseline` receipts; `pass_quality` / `pass_tokens` stay null until enough observations (`MIN_OBSERVATIONS`). Quality is Hermes verified success, not an LLM judge. After Hermes verifies a pack:
+
+```bash
+python3 -m kerdoios record --provider openai --model gpt-6-astra --task-type baseline --completed
+```
+
+Cheaper replay uses a non-baseline `--task-type`. `--live` does not query live adapters or call models.
 
 Once loaded by Hermes:
 
@@ -95,6 +104,7 @@ Once loaded by Hermes:
 hermes kerdoios inventory
 hermes kerdoios plan
 hermes kerdoios explain
+hermes kerdoios bench
 ```
 
 ## Architecture

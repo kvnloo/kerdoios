@@ -5,6 +5,7 @@ import json
 import sys
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
+from .bench import report as bench_report
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -94,6 +95,26 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--cost", type=float, default=0.0)
     record_p.add_argument("--retried", action="store_true")
 
+    bench_p = sub.add_parser(
+        "bench",
+        help="Quality-aware token bench vs Astra-class (frozen fixtures, no network)",
+    )
+    bench_p.add_argument(
+        "--live",
+        action="store_true",
+        help="Include ex-post quality vs Astra task_type=baseline receipts. Does not call models or query live adapters.",
+    )
+    bench_p.add_argument(
+        "--observed-log",
+        default=None,
+        help="Observed JSONL path for --live (default KERDOIOS_OBSERVED_LOG)",
+    )
+    bench_p.add_argument(
+        "--fixtures",
+        default=None,
+        help="Fixture directory (default tests/fixtures/bench)",
+    )
+
     ns = parser.parse_args(argv)
     if ns.command == "record":
         record(
@@ -104,6 +125,22 @@ def main(argv: list[str] | None = None) -> int:
                 completed=ns.completed,
                 actual_cost=ns.cost,
                 retried=ns.retried,
+            )
+        )
+        return 0
+    if ns.command == "bench":
+        from pathlib import Path
+
+        log = getattr(ns, "observed_log", None)
+        fixtures = getattr(ns, "fixtures", None)
+        print(
+            json.dumps(
+                bench_report(
+                    fixtures=Path(fixtures) if fixtures else None,
+                    live=bool(getattr(ns, "live", False)),
+                    path=Path(log) if log else None,
+                ),
+                indent=2,
             )
         )
         return 0

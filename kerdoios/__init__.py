@@ -152,6 +152,29 @@ RECORD_SCHEMA = {
     },
 }
 
+BENCH_SCHEMA = {
+    "name": "kerdoios_bench",
+    "description": (
+        "Replay plan() on the frozen tests/fixtures/bench catalog and task suite. "
+        "Reports estimated tokens, estimated $, frontier-token share, unplaced workers, "
+        "and capability vs the Astra-class offer (frontier/paid). "
+        "live=true adds ex-post quality vs task_type=baseline receipts. Does not call models."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "live": {
+                "type": "boolean",
+                "description": "Include ex-post quality vs Astra baseline receipts. Does not query live adapters or call models.",
+            },
+            "observed_log": {
+                "type": "string",
+                "description": "Observed JSONL path for live receipts (default KERDOIOS_OBSERVED_LOG)",
+            },
+        },
+    },
+}
+
 
 def register(ctx: Any) -> None:
     def _offers(args: dict[str, Any]):
@@ -207,10 +230,25 @@ def register(ctx: Any) -> None:
         record(observation)
         return json.dumps(observation.to_dict(), indent=2)
 
+    def handle_bench(args: dict[str, Any], **kwargs: Any) -> str:
+        from pathlib import Path
+
+        from .bench import report as bench_report
+
+        log = args.get("observed_log")
+        return json.dumps(
+            bench_report(
+                live=bool(args.get("live")),
+                path=Path(log) if log else None,
+            ),
+            indent=2,
+        )
+
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
     ctx.register_tool(name="kerdoios_inventory", toolset="kerdoios", schema=INVENTORY_SCHEMA, handler=handle_inventory)
     ctx.register_tool(name="kerdoios_record", toolset="kerdoios", schema=RECORD_SCHEMA, handler=handle_record)
+    ctx.register_tool(name="kerdoios_bench", toolset="kerdoios", schema=BENCH_SCHEMA, handler=handle_bench)
 
     def _cli(ns: Any) -> None:
         command = getattr(ns, "kerdoios_command", None) or getattr(ns, "command", None)
@@ -224,6 +262,16 @@ def register(ctx: Any) -> None:
                         "completed": bool(getattr(ns, "completed", False)),
                         "cost": getattr(ns, "cost", 0.0),
                         "retried": bool(getattr(ns, "retried", False)),
+                    }
+                )
+            )
+            return
+        if command == "bench":
+            print(
+                handle_bench(
+                    {
+                        "live": bool(getattr(ns, "live", False)),
+                        "observed_log": getattr(ns, "observed_log", None),
                     }
                 )
             )
@@ -277,6 +325,9 @@ def register(ctx: Any) -> None:
         record_p.add_argument("--completed", action="store_true")
         record_p.add_argument("--cost", type=float, default=0.0)
         record_p.add_argument("--retried", action="store_true")
+        bench_p = subs.add_parser("bench")
+        bench_p.add_argument("--live", action="store_true")
+        bench_p.add_argument("--observed-log", default=None)
         subparser.set_defaults(func=_cli)
 
     if hasattr(ctx, "register_cli_command"):
