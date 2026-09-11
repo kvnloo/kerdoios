@@ -54,8 +54,8 @@ class Capacity:
 
 @dataclass(frozen=True)
 class Economics:
-    input_token_price: float = 0.0
-    output_token_price: float = 0.0
+    input_token_price: float | None = None
+    output_token_price: float | None = None
     hourly_price: float = 0.0
     remaining_free_quota: float = 0.0
     remaining_credits: float = 0.0
@@ -65,7 +65,10 @@ class Economics:
     def marginal_cost_per_token(self) -> float:
         if self.remaining_free_quota > 0 or self.remaining_credits > 0:
             return 0.0
-        return self.input_token_price + self.output_token_price
+        inp = self.input_token_price
+        out = self.output_token_price
+        # Unset prices are unknown; callers must not treat this 0 as a free tier.
+        return (0.0 if inp is None else inp) + (0.0 if out is None else out)
 
     def expiration_urgency(self) -> float:
         """Higher when free capacity is about to vanish. Permanent local stock is 1.0."""

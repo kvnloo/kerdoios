@@ -72,8 +72,10 @@ python3 -m kerdoios inventory --free
 ```
 
 `--free` queries OpenRouter's public `/models` catalog and keeps `:free` ids,
-$0/$0 prices, remaining quota/credits, and local endpoints. It does **not**
-mix the 7-row demo fixture. If the network is empty, Kerdoios loads
+remaining quota/credits that were actually populated, and local endpoints.
+Missing, `None`, or default-0 catalog prices are unknown, not free — including
+LiteLLM's `input_cost_per_token == 0` rows (missing prices, rerank, embeddings).
+It does **not** mix the 7-row demo fixture. If the network is empty, Kerdoios loads
 `providers/openrouter_free.snapshot.json`. Groq/Cerebras stay env-gated
 (`GROQ_API_KEY` / `CEREBRAS_API_KEY`) and are skipped without a key.
 

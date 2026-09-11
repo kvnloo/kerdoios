@@ -37,6 +37,9 @@ the first PR. Isolated scope, one mocked test, `make lint`.
 
 1. **Small, unopinionated**
    - Pricing-table fixes for Groq / Cerebras / OpenRouter `:free`
+   - Do **not** treat LiteLLM `input_cost_per_token == 0` as a free chat
+     tier (~150 rows are missing prices, rerank, or embeddings). Fix those
+     rows upstream; Kerdoios must not bulk-ingest them as `--free`.
    - Map remaining-quota / retry-after headers into router state
    - `insufficient_quota` vs retryable `429` (several prior PRs; finish a still-open slice)
    - Docs: `cost-based-routing` + provider budget examples for free tiers
