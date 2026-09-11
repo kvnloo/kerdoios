@@ -27,6 +27,7 @@ class PluginManifestTests(unittest.TestCase):
     def test_plugin_yaml_lists_record_tool(self) -> None:
         text = (ROOT / "plugin.yaml").read_text(encoding="utf-8")
         self.assertRegex(text, r"(?m)^  - kerdoios_record$")
+        self.assertRegex(text, r"(?m)^  - kerdoios_validate$")
         self.assertIn("- kerdoios_plan", text)
         self.assertIn("- kerdoios_explain", text)
         self.assertIn("- kerdoios_inventory", text)
@@ -38,7 +39,13 @@ class RegisterTests(unittest.TestCase):
         register(ctx)
         self.assertEqual(
             set(ctx.tools),
-            {"kerdoios_plan", "kerdoios_explain", "kerdoios_inventory", "kerdoios_record"},
+            {
+                "kerdoios_plan",
+                "kerdoios_explain",
+                "kerdoios_inventory",
+                "kerdoios_record",
+                "kerdoios_validate",
+            },
         )
         self.assertEqual(ctx.tools["kerdoios_record"]["toolset"], "kerdoios")
         self.assertEqual(ctx.tools["kerdoios_record"]["schema"]["name"], "kerdoios_record")

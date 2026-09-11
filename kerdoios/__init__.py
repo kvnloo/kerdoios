@@ -152,6 +152,40 @@ RECORD_SCHEMA = {
     },
 }
 
+VALIDATE_SCHEMA = {
+    "name": "kerdoios_validate",
+    "description": (
+        "Compare a Kerdoios plan to naive paid-only (equal work, not same-budget truncate). "
+        "Does not call models."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "workers": {"type": "integer", "minimum": 1, "description": "Requested parallelism"},
+            "budget": {"type": "number", "description": "Maximum monetary cost in USD"},
+            "mode": {
+                "type": "string",
+                "enum": ["free", "cheap", "balanced", "fast", "max", "scale", "private"],
+            },
+            "context": {"type": "integer", "description": "Minimum context window"},
+            "privacy": {"type": "string", "enum": ["public", "confidential", "local_only"]},
+            "coding": {"type": "number"},
+            "reasoning": {"type": "number"},
+            "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier; no fixture mix)"},
+            "observed": {
+                "type": "boolean",
+                "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
+            },
+            "aodl": {"description": "AODL-shaped work spec object or JSON path"},
+            "observed_log": {
+                "type": "string",
+                "description": "Observed JSONL path (task_type=baseline receipts for the success cell)",
+            },
+        },
+    },
+}
+
 
 def register(ctx: Any) -> None:
     def _offers(args: dict[str, Any]):
@@ -207,10 +241,26 @@ def register(ctx: Any) -> None:
         record(observation)
         return json.dumps(observation.to_dict(), indent=2)
 
+    def handle_validate(args: dict[str, Any], **kwargs: Any) -> str:
+        try:
+            requirement = _req_from_args(args)
+        except AodlIngestError as exc:
+            return f"aodl: {exc}"
+        from pathlib import Path
+
+        from .tokenomics import report
+
+        offers = _offers(args)
+        built = plan(offers, requirement, use_observed=bool(args.get("observed")))
+        log = args.get("observed_log")
+        path = Path(log) if log else None
+        return json.dumps(report(offers, requirement, built, path=path), indent=2)
+
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
     ctx.register_tool(name="kerdoios_inventory", toolset="kerdoios", schema=INVENTORY_SCHEMA, handler=handle_inventory)
     ctx.register_tool(name="kerdoios_record", toolset="kerdoios", schema=RECORD_SCHEMA, handler=handle_record)
+    ctx.register_tool(name="kerdoios_validate", toolset="kerdoios", schema=VALIDATE_SCHEMA, handler=handle_validate)
 
     def _cli(ns: Any) -> None:
         command = getattr(ns, "kerdoios_command", None) or getattr(ns, "command", None)
@@ -253,11 +303,15 @@ def register(ctx: Any) -> None:
         if command == "explain":
             print(handle_explain(args))
             return
+        if command == "validate":
+            args["observed_log"] = getattr(ns, "observed_log", None)
+            print(handle_validate(args))
+            return
         print(handle_plan(args))
 
     def _setup(subparser: Any) -> None:
         subs = subparser.add_subparsers(dest="kerdoios_command")
-        for name in ("inventory", "plan", "explain"):
+        for name in ("inventory", "plan", "explain", "validate"):
             p = subs.add_parser(name)
             p.add_argument("--live", action="store_true")
             p.add_argument("--free", action="store_true")
@@ -270,6 +324,8 @@ def register(ctx: Any) -> None:
                 p.add_argument("--privacy", default="public")
                 p.add_argument("--observed", action="store_true")
                 p.add_argument("--aodl", default=None)
+            if name == "validate":
+                p.add_argument("--observed-log", default=None)
         record_p = subs.add_parser("record")
         record_p.add_argument("--provider", required=True)
         record_p.add_argument("--model", required=True)
