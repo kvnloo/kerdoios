@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .explain import explain
@@ -10,6 +11,7 @@ from .inventory import discover_all
 from .observed import Observation, record
 from .optimize import plan
 from .providers.free import is_free
+from .tokenomics import report
 from .types import Mode, WorkRequirement
 
 
@@ -64,7 +66,11 @@ def main(argv: list[str] | None = None) -> int:
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
-    for item in (plan_p, explain_p):
+    validate_p = sub.add_parser(
+        "validate",
+        help="Compare a plan to naive paid-only (equal work, not same-budget truncate)",
+    )
+    for item in (plan_p, explain_p, validate_p):
         item.add_argument("--live", action="store_true")
         item.add_argument(
             "--free",
@@ -85,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="AODL-shaped work spec JSON path (or - for stdin)",
         )
+    validate_p.add_argument(
+        "--observed-log",
+        default=None,
+        help="Observed JSONL path (task_type=baseline receipts for the success cell)",
+    )
 
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
@@ -138,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":
         print(explain(offers, requirement, built))
+        return 0
+    if ns.command == "validate":
+        log = getattr(ns, "observed_log", None)
+        path = Path(log) if log else None
+        print(json.dumps(report(offers, requirement, built, path=path), indent=2))
         return 0
     print(json.dumps(built.to_dict(), indent=2))
     return 0

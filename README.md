@@ -87,6 +87,7 @@ python3 -m kerdoios inventory
 python3 -m kerdoios inventory --live
 python3 -m kerdoios plan --workers 100 --context 128000 --budget 0.50 --mode cheap
 python3 -m kerdoios explain --workers 100 --budget 0.50
+python3 -m kerdoios validate --workers 100 --budget 0.50 --mode cheap
 ```
 
 Once loaded by Hermes:
@@ -95,6 +96,7 @@ Once loaded by Hermes:
 hermes kerdoios inventory
 hermes kerdoios plan
 hermes kerdoios explain
+hermes kerdoios validate
 ```
 
 ## Architecture

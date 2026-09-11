@@ -43,6 +43,7 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 | Unit | `python3 -m unittest discover -s tests` |
 | Mutation | `n/a` until a mutator is installed; do not invent a score |
 | Runtime | `python3 -m kerdoios plan --workers 8 --mode cheap` |
+| Tokenomics | `python3 -m kerdoios validate --workers 100 --budget 0.50 --mode cheap` |
 | Free seed | `python3 -m kerdoios inventory --free` |
 
 1. Name the intended vs current behavior.
