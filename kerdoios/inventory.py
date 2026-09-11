@@ -10,7 +10,7 @@ from __future__ import annotations
 from .cache import load_inventory_cache, save_inventory_cache
 from .providers import local, openrouter
 from .providers.fixture import fixture_offers
-from .providers.free import filter_free
+from .providers.free import filter_free, is_free
 from .providers.openai_compat import discover_cerebras, discover_groq
 from .types import ResourceOffer
 
@@ -36,22 +36,34 @@ def _merge(base: list[ResourceOffer], live_rows: list[ResourceOffer]) -> list[Re
     return kept + live_rows
 
 
+def _keep_free_inventory(offers: list[ResourceOffer]) -> list[ResourceOffer]:
+    """OpenRouter/local use is_free; keyed Groq/Cerebras overlay is already free-tier filtered."""
+    kept: list[ResourceOffer] = []
+    for offer in offers:
+        if offer.provider in {"groq", "cerebras"}:
+            kept.append(offer)
+            continue
+        if is_free(offer):
+            kept.append(offer)
+    return kept
+
+
 def _discover_free(*, refresh: bool = False) -> list[ResourceOffer]:
     if not refresh:
         cached = load_inventory_cache()
         if cached:
-            return filter_free(cached)
+            return _keep_free_inventory(cached)
     live_rows = collect_live(free_only=True)
     if live_rows:
         if not _has_openrouter_catalog(live_rows):
             # Keyed Groq/Cerebras must overlay the OpenRouter seed, not replace it.
             live_rows = openrouter.discover_snapshot() + live_rows
-        offers = filter_free(live_rows)
+        offers = _keep_free_inventory(live_rows)
         save_inventory_cache(offers)
         return offers
     stale = load_inventory_cache(ignore_ttl=True)
     if stale:
-        return filter_free(stale)
+        return _keep_free_inventory(stale)
     return filter_free(openrouter.discover_snapshot())
 
 

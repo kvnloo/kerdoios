@@ -20,8 +20,12 @@ class ScoredOffer:
 def effective_unit_cost(offer: ResourceOffer, req: WorkRequirement) -> float:
     tokens = max(1, req.estimated_input_tokens + req.estimated_output_tokens)
     free = offer.economics.remaining_free_quota + offer.economics.remaining_credits
-    token_cost = offer.economics.input_token_price * req.estimated_input_tokens
-    token_cost += offer.economics.output_token_price * req.estimated_output_tokens
+    inp = offer.economics.input_token_price
+    out = offer.economics.output_token_price
+    # Unset prices are unknown at the catalog layer; arithmetic needs a float.
+    # is_free still refuses None/default-0 as a free chat tier.
+    token_cost = (0.0 if inp is None else inp) * req.estimated_input_tokens
+    token_cost += (0.0 if out is None else out) * req.estimated_output_tokens
     if free > 0:
         # remaining free units are treated as covering this worker's tokens first
         covered = min(1.0, free / float(tokens))

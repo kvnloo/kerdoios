@@ -77,8 +77,10 @@ def _offers_from_payload(
                 ),
                 capacity=Capacity(concurrency=30 if free else 20, context_window=ctx_i),
                 economics=Economics(
-                    input_token_price=inp or 0.0,
-                    output_token_price=out or 0.0,
+                    # Missing prompt/completion is unknown. `or 0.0` would
+                    # turn that into a fake $0 chat tier.
+                    input_token_price=inp,
+                    output_token_price=out,
                     remaining_free_quota=row_quota,
                     seconds_until_quota_reset=row_reset,
                 ),

@@ -22,7 +22,7 @@ from kerdoios.cache import (
     save_inventory_cache,
 )
 from kerdoios.inventory import discover_all
-from kerdoios.providers.free import is_free
+from kerdoios.providers.free import filter_free, is_free
 from kerdoios.providers.http import JsonResponse
 from kerdoios.providers.openrouter import _offers_from_payload, discover as or_discover
 from kerdoios.providers.openai_compat import discover_cerebras, discover_groq
@@ -241,7 +241,81 @@ class FreeFilterTests(unittest.TestCase):
             )
         )
         self.assertTrue(is_free(replace(paid, local=True)))
-        self.assertTrue(is_free(replace(paid, economics=Economics())))
+        # Economics() default 0/0 is unset, not a trusted free chat tier.
+        self.assertFalse(is_free(replace(paid, economics=Economics())))
+
+    def test_litellm_zero_input_cost_is_not_free_chat(self) -> None:
+        """LiteLLM's input_cost_per_token==0 rows are missing/rerank/embedding, not free chat."""
+        base = next(o for o in fixture_offers() if o.id == "frontier/paid")
+        dump = [
+            {
+                "model_name": "cohere/rerank-english-v3.0",
+                "mode": "rerank",
+                "input_cost_per_token": 0,
+                "output_cost_per_token": 0,
+            },
+            {
+                "model_name": "openai/text-embedding-3-small",
+                "mode": "embedding",
+                "input_cost_per_token": 0,
+                "output_cost_per_token": 0,
+            },
+            {
+                "model_name": "mystery-provider/unpriced-chat",
+                "input_cost_per_token": 0,
+            },
+        ]
+        offers = []
+        for row in dump:
+            offer = replace(
+                base,
+                id=f"litellm/{row['model_name']}",
+                provider="litellm",
+                model=row["model_name"],
+                local=False,
+                economics=Economics(
+                    input_token_price=float(row["input_cost_per_token"]),
+                    output_token_price=float(row["output_cost_per_token"])
+                    if "output_cost_per_token" in row
+                    else None,
+                ),
+            )
+            offers.append(offer)
+            self.assertFalse(is_free(offer), msg=row["model_name"])
+        self.assertEqual(filter_free(offers), [])
+
+    def test_openrouter_missing_prices_are_unknown_not_free(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "id": "vendor/unpriced-embed",
+                    "context_length": 8192,
+                    "pricing": {},
+                    "architecture": {"modality": "text"},
+                    "supported_parameters": [],
+                }
+            ]
+        }
+        offer = _offers_from_payload(payload)[0]
+        self.assertIsNone(offer.economics.input_token_price)
+        self.assertIsNone(offer.economics.output_token_price)
+        self.assertFalse(is_free(offer))
+        self.assertEqual(filter_free([offer]), [])
+
+    def test_colon_free_id_stays_free_without_catalog_prices(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "id": "meta/llama:free",
+                    "context_length": 8192,
+                    "pricing": {},
+                    "architecture": {"modality": "text"},
+                    "supported_parameters": ["tools"],
+                }
+            ]
+        }
+        offer = _offers_from_payload(payload)[0]
+        self.assertTrue(is_free(offer))
 
 
 class LiveMergeTests(unittest.TestCase):

@@ -6,11 +6,11 @@ from ..types import ResourceOffer
 
 
 def is_free(offer: ResourceOffer) -> bool:
-    """Keep :free ids, $0/$0 prices, remaining quota/credits, or local stock.
+    """Keep :free ids, remaining quota/credits, or local stock.
 
-    LiteLLM rows with ``input_cost_per_token == 0`` are often missing prices,
-    rerankers, or embeddings — not a real free chat model. Do not ingest them
-    as free.
+    Missing / None / default-0 catalog prices are unknown, not a free chat
+    tier. LiteLLM's ``input_cost_per_token == 0`` rows are mostly missing
+    prices, rerankers, or embeddings — do not ingest that dump as ``--free``.
     """
     if offer.local:
         return True
@@ -19,8 +19,6 @@ def is_free(offer: ResourceOffer) -> bool:
         return True
     econ = offer.economics
     if econ.remaining_free_quota > 0 or econ.remaining_credits > 0:
-        return True
-    if econ.input_token_price == 0 and econ.output_token_price == 0:
         return True
     return False
 
