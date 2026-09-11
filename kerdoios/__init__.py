@@ -147,6 +147,18 @@ RECORD_SCHEMA = {
             "completed": {"type": "boolean"},
             "cost": {"type": "number", "description": "Actual cost in USD"},
             "retried": {"type": "boolean"},
+            "origin_provider": {
+                "type": "string",
+                "description": "Origin provider when the offer was routed via an aggregator",
+            },
+            "input_tokens": {"type": "integer"},
+            "output_tokens": {"type": "integer"},
+            "http_status": {"type": "integer"},
+            "remaining_quota": {"type": "number"},
+            "remaining_source": {
+                "type": "string",
+                "description": "catalog remaining is not burn remaining",
+            },
         },
         "required": ["provider", "model"],
     },
@@ -196,6 +208,26 @@ def register(ctx: Any) -> None:
             raise ValueError("kerdoios_record requires provider and model")
         cost_raw = args.get("cost")
         actual_cost = 0.0 if cost_raw is None or cost_raw == "" else float(cost_raw)
+
+        def _opt_str(key: str) -> str | None:
+            raw = args.get(key)
+            if raw is None or raw == "":
+                return None
+            text = str(raw).strip()
+            return text or None
+
+        def _opt_int(key: str) -> int | None:
+            raw = args.get(key)
+            if raw is None or raw == "":
+                return None
+            return int(raw)
+
+        def _opt_float(key: str) -> float | None:
+            raw = args.get(key)
+            if raw is None or raw == "":
+                return None
+            return float(raw)
+
         observation = Observation(
             provider=provider,
             model=model,
@@ -203,9 +235,15 @@ def register(ctx: Any) -> None:
             completed=bool(args.get("completed")),
             actual_cost=actual_cost,
             retried=bool(args.get("retried")),
+            origin_provider=_opt_str("origin_provider"),
+            input_tokens=_opt_int("input_tokens"),
+            output_tokens=_opt_int("output_tokens"),
+            http_status=_opt_int("http_status"),
+            remaining_quota=_opt_float("remaining_quota"),
+            remaining_source=_opt_str("remaining_source"),
         )
-        record(observation)
-        return json.dumps(observation.to_dict(), indent=2)
+        stored = record(observation)
+        return json.dumps(stored.to_dict(), indent=2)
 
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
@@ -224,7 +262,29 @@ def register(ctx: Any) -> None:
                         "completed": bool(getattr(ns, "completed", False)),
                         "cost": getattr(ns, "cost", 0.0),
                         "retried": bool(getattr(ns, "retried", False)),
+                        "origin_provider": getattr(ns, "origin_provider", None),
+                        "input_tokens": getattr(ns, "input_tokens", None),
+                        "output_tokens": getattr(ns, "output_tokens", None),
+                        "http_status": getattr(ns, "http_status", None),
+                        "remaining_quota": getattr(ns, "remaining_quota", None),
+                        "remaining_source": getattr(ns, "remaining_source", None),
                     }
+                )
+            )
+            return
+        if command == "watchdog":
+            from pathlib import Path
+
+            from .watchdog import report
+
+            log = getattr(ns, "observed_log", None)
+            print(
+                json.dumps(
+                    report(
+                        path=Path(log) if log else None,
+                        live_free=bool(getattr(ns, "live_free", False)),
+                    ),
+                    indent=2,
                 )
             )
             return
@@ -277,6 +337,15 @@ def register(ctx: Any) -> None:
         record_p.add_argument("--completed", action="store_true")
         record_p.add_argument("--cost", type=float, default=0.0)
         record_p.add_argument("--retried", action="store_true")
+        record_p.add_argument("--origin-provider", default=None)
+        record_p.add_argument("--input-tokens", type=int, default=None)
+        record_p.add_argument("--output-tokens", type=int, default=None)
+        record_p.add_argument("--http-status", type=int, default=None)
+        record_p.add_argument("--remaining-quota", type=float, default=None)
+        record_p.add_argument("--remaining-source", default=None)
+        wd_p = subs.add_parser("watchdog")
+        wd_p.add_argument("--observed-log", default=None)
+        wd_p.add_argument("--live-free", action="store_true")
         subparser.set_defaults(func=_cli)
 
     if hasattr(ctx, "register_cli_command"):
