@@ -50,6 +50,7 @@ Install into `~/.hermes/plugins/kerdoios/`. Do **not** PR this into `NousResearc
 
 ```bash
 git clone https://github.com/kvnloo/kerdoios.git ~/.hermes/plugins/kerdoios
+hermes secrets bitwarden setup
 hermes plugins doctor ~/.hermes/plugins/kerdoios --ci
 hermes plugins enable kerdoios
 ```
@@ -60,13 +61,19 @@ hermes plugins enable kerdoios
 pip install -e .
 ```
 
-The critical-path seed is **public free models**. No API keys are required:
+The critical-path seed is **public free models**. No API keys are required for OpenRouter `:free` listing:
 
 ```bash
 python3 -m kerdoios inventory --free
 ```
 
-`--free` queries OpenRouter's public `/models` catalog and keeps `:free` ids, remaining quota/credits that were actually populated, and local endpoints. Missing, `None`, or default-0 catalog prices are unknown, not free — including LiteLLM's `input_cost_per_token == 0` rows (missing prices, rerank, embeddings). It does **not** mix the 7-row demo fixture. If the network is empty, Kerdoios loads `kerdoios/providers/openrouter_free.snapshot.json`. When `GROQ_API_KEY` / `CEREBRAS_API_KEY` are set, keyed free-tier chat rows from those catalogs are overlaid; missing keys stay skipped.
+`--free` queries OpenRouter's public `/models` catalog and keeps `:free` ids, remaining quota/credits that were actually populated, and local endpoints. Missing, `None`, or default-0 catalog prices are unknown, not free — including LiteLLM's `input_cost_per_token == 0` rows (missing prices, rerank, embeddings). It does **not** mix the 7-row demo fixture. If the network is empty, Kerdoios loads `kerdoios/providers/openrouter_free.snapshot.json`. Keyed Groq/Cerebras free-tier overlays only when those secrets resolve through Hermes Bitwarden; a missing vault is not a free overlay, and leftover `GROQ_API_KEY` / `CEREBRAS_API_KEY` env vars are ignored.
+
+`hermes plugins doctor` / enable **fail closed** until `hermes secrets bitwarden setup` has configured the vault and Kerdoios can resolve the provider-key catalog through it. Public `:free` listing can still run; that does not make the plugin healthy on a half-configured host. Check with:
+
+```bash
+python3 -m kerdoios doctor
+```
 
 Live adapters without the free filter overlay the full OpenRouter catalog on the fixture:
 
@@ -75,7 +82,7 @@ python3 -m kerdoios inventory --live
 python3 -m kerdoios plan --live --workers 100 --budget 0.50 --mode cheap
 ```
 
-`--live` queries OpenRouter's public `/models` catalog, any OpenAI-compatible local endpoint (`KERDOIOS_LOCAL_BASE_URL`, then `:11434` / `:1234`), and Groq/Cerebras only when those env keys already exist. Missing keys or a down network return an empty adapter result; planning still uses the fixture catalog. Do not ingest Tailscale or portal tokens into git.
+`--live` queries OpenRouter's public `/models` catalog, any OpenAI-compatible local endpoint (`KERDOIOS_LOCAL_BASE_URL`, then `:11434` / `:1234`), and Groq/Cerebras only when those vault secrets resolve. Missing vault, missing keys, or a down network return an empty adapter result; planning still uses the fixture catalog. Do not ingest Tailscale or portal tokens into git.
 
 See [ROADMAP.md](ROADMAP.md) for what is done, in progress, and out of MVP.
 

@@ -19,9 +19,9 @@ Then:
 
 ```bash
 cp -R . ~/.hermes/plugins/kerdoios
+hermes secrets bitwarden setup
 hermes plugins doctor ~/.hermes/plugins/kerdoios --ci
 hermes plugins enable kerdoios
 ```
 
-Live provider adapters stay off until you pass `--live`. They read env already
-on the host. Do not paste API keys or Tailscale credentials into issues or git.
+Live provider adapters stay off until you pass `--live`. Keyed Groq/Cerebras/OpenRouter-paid secrets load from Hermes Bitwarden, not `.env`. Do not paste API keys or Tailscale credentials into issues or git.

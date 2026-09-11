@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from ..vault import provider_secret
 from .http import get_json_response, quota_from_headers
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
@@ -95,7 +95,9 @@ def _offers_from_payload(
 
 
 def discover(*, api_key: str | None = None) -> list[ResourceOffer]:
-    key = api_key if api_key is not None else os.environ.get("OPENROUTER_API_KEY")
+    # Public /models listing works without a key. Paid overflow and remaining
+    # headers use the vault when Hermes has injected OPENROUTER_API_KEY.
+    key = api_key if api_key is not None else provider_secret("openrouter")
     fetched = get_json_response(OPENROUTER_MODELS, api_key=key)
     if not fetched:
         return []
