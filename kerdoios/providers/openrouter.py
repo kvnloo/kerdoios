@@ -58,12 +58,13 @@ def _offers_from_payload(
         free = ":free" in mid.lower() or (inp == 0 and out == 0)
         has_tools = _supports_tools(item)
         origin = mid.split("/", 1)[0] or "openrouter"
+        offer_id = mid if mid.startswith(f"{origin}/") else f"{origin}/{mid}"
         # Paid rows must not inherit rate-limit remaining; that field would mark them free.
         row_quota = remaining_free_quota if free and remaining_free_quota is not None else 0.0
         row_reset = seconds_until_quota_reset if free and remaining_free_quota is not None else None
         offers.append(
             ResourceOffer(
-                id=f"{origin}/{mid}",
+                id=offer_id,
                 provider=origin,
                 resource_type="llm",
                 model=mid,
