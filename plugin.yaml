@@ -11,12 +11,3 @@ provides_tools:
   - kerdoios_explain
   - kerdoios_inventory
 provides_hooks: []
-config_schema:
-  default_mode:
-    type: str
-    default: balanced
-    description: Preset FREE|CHEAP|BALANCED|FAST|MAX|SCALE|PRIVATE
-  maximum_paid_usd:
-    type: float
-    default: 0.0
-    description: Hard cap on paid spend for a plan when the work requirement omits budget

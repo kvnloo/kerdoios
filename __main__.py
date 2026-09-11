@@ -9,11 +9,11 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT.parent))
 
-from kerdoios.explain import explain  # noqa: E402
-from kerdoios.inventory import discover_all  # noqa: E402
-from kerdoios.optimize import plan  # noqa: E402
-from kerdoios.providers.free import is_free  # noqa: E402
-from kerdoios.types import Mode, WorkRequirement  # noqa: E402
+from kerdoios.explain import explain  # noqa: E402  # after sys.path insert so checkout imports resolve
+from kerdoios.inventory import discover_all  # noqa: E402  # after sys.path insert so checkout imports resolve
+from kerdoios.optimize import plan  # noqa: E402  # after sys.path insert so checkout imports resolve
+from kerdoios.providers.free import is_free  # noqa: E402  # after sys.path insert so checkout imports resolve
+from kerdoios.types import Mode, WorkRequirement  # noqa: E402  # after sys.path insert so checkout imports resolve
 
 
 def _req(ns: argparse.Namespace) -> WorkRequirement:
@@ -59,7 +59,6 @@ def main(argv: list[str] | None = None) -> int:
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
-        item.add_argument("--fixture", action="store_true", default=True)
         item.add_argument("--live", action="store_true")
         item.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
         item.add_argument("--workers", type=int, default=8)

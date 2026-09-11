@@ -59,7 +59,6 @@ def allocate(offers: list[ScoredOffer], req: WorkRequirement) -> tuple[list[Plac
         take = min(remaining, item.offer.capacity.concurrency)
         if take <= 0:
             continue
-        # FREE mode refuses paid overflow
         if req.mode == Mode.FREE and item.unit_cost > 0:
             continue
         while take > 0:

@@ -28,17 +28,6 @@ class CapabilityProfile:
     vision: float = 0.0
     provenance: ProvenanceKind = "provider_claim"
 
-    def score_for(self, coding: float | None = None, reasoning: float | None = None, tool_use: float | None = None) -> float:
-        parts = [self.coding, self.reasoning, self.tool_use]
-        weights = [1.0, 1.0, 1.0]
-        if coding is not None:
-            parts[0] = self.coding if self.coding >= coding else 0.0
-        if reasoning is not None:
-            parts[1] = self.reasoning if self.reasoning >= reasoning else 0.0
-        if tool_use is not None:
-            parts[2] = self.tool_use if self.tool_use >= tool_use else 0.0
-        return sum(parts) / sum(weights)
-
 
 @dataclass(frozen=True)
 class Capacity:

@@ -11,7 +11,7 @@ from .explain import explain
 from .inventory import discover_all
 from .optimize import plan
 from .providers.free import is_free
-from .types import Mode, WorkRequirement
+from .types import Mode, PrivacyClass, WorkRequirement
 
 
 def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
@@ -24,6 +24,10 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
     if isinstance(tools, str):
         tools = [part.strip() for part in tools.split(",") if part.strip()]
     budget = args.get("budget")
+    privacy_raw = str(args.get("privacy") or "public")
+    privacy: PrivacyClass = (
+        privacy_raw if privacy_raw in ("public", "confidential", "local_only") else "public"
+    )
     return WorkRequirement(
         coding=float(args.get("coding") or 0.7),
         reasoning=float(args.get("reasoning") or 0.6),
@@ -34,7 +38,7 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
         estimated_input_tokens=int(args.get("input_tokens") or 4000),
         estimated_output_tokens=int(args.get("output_tokens") or 800),
         maximum_cost=float(budget) if budget is not None and budget != "" else None,
-        privacy=str(args.get("privacy") or "public"),  # type: ignore[arg-type]
+        privacy=privacy,
         mode=mode,
         tools=tuple(tools) if tools else ("github",),
     )
@@ -84,7 +88,7 @@ PLAN_SCHEMA = {
 
 EXPLAIN_SCHEMA = {
     "name": "kerdoios_explain",
-    "description": "Explain a Kerdoios placement against the fixture or last inventory.",
+    "description": "Explain a Kerdoios placement against the current inventory.",
     "parameters": {
         "type": "object",
         "properties": {
