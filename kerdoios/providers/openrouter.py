@@ -53,10 +53,11 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
         vision = 0.7 if "image" in modality.lower() else 0.0
         free = ":free" in mid.lower() or (inp == 0 and out == 0)
         has_tools = _supports_tools(item)
+        origin = mid.split("/", 1)[0] or "openrouter"
         offers.append(
             ResourceOffer(
-                id=f"openrouter/{mid}",
-                provider="openrouter",
+                id=f"{origin}/{mid}",
+                provider=origin,
                 resource_type="llm",
                 model=mid,
                 local=False,
