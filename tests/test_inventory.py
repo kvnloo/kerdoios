@@ -318,6 +318,100 @@ class FreeFilterTests(unittest.TestCase):
         self.assertTrue(is_free(offer))
 
 
+class OpenaiCompatMissingPriceTests(unittest.TestCase):
+    """Groq/Cerebras catalog ingest must not treat missing prices as $0."""
+
+    def _discover(self, body: dict, *, groq: bool = True):
+        resp = JsonResponse(body=body, headers={})
+        with patch("kerdoios.providers.openai_compat.get_json_response", return_value=resp):
+            if groq:
+                return discover_groq(api_key="g-test")
+            return discover_cerebras(api_key="c-test")
+
+    def test_missing_and_none_prices_stay_unknown_not_free(self) -> None:
+        offers = self._discover(
+            {
+                "data": [
+                    {"id": "whisper-large-v3", "context_window": 448},
+                    {
+                        "id": "empty-pricing",
+                        "pricing": {},
+                        "context_window": 8192,
+                    },
+                    {
+                        "id": "null-prices",
+                        "pricing": {"prompt": None, "completion": None},
+                        "context_window": 8192,
+                    },
+                    {
+                        "id": "output-only",
+                        "pricing": {"completion": "0.000002"},
+                        "context_window": 8192,
+                    },
+                    {
+                        "id": "enterprise-only",
+                        "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+                        "context_window": 128000,
+                    },
+                ]
+            }
+        )
+        by_model = {o.model: o for o in offers}
+
+        missing = by_model["whisper-large-v3"]
+        self.assertIsNone(missing.economics.input_token_price)
+        self.assertIsNone(missing.economics.output_token_price)
+        self.assertFalse(is_free(missing))
+        self.assertEqual(filter_free([missing]), [])
+
+        empty = by_model["empty-pricing"]
+        self.assertIsNone(empty.economics.input_token_price)
+        self.assertIsNone(empty.economics.output_token_price)
+        self.assertFalse(is_free(empty))
+
+        nulls = by_model["null-prices"]
+        self.assertIsNone(nulls.economics.input_token_price)
+        self.assertIsNone(nulls.economics.output_token_price)
+        self.assertFalse(is_free(nulls))
+
+        one_side = by_model["output-only"]
+        self.assertIsNone(one_side.economics.input_token_price)
+        self.assertEqual(one_side.economics.output_token_price, 0.000002)
+        self.assertFalse(is_free(one_side))
+
+        paid = by_model["enterprise-only"]
+        self.assertEqual(paid.economics.input_token_price, 1e-6)
+        self.assertEqual(paid.economics.output_token_price, 2e-6)
+        self.assertFalse(is_free(paid))
+
+    def test_advertised_zero_prices_stay_zero(self) -> None:
+        offers = self._discover(
+            {
+                "data": [
+                    {
+                        "id": "preview-zero",
+                        "pricing": {"prompt": "0", "completion": "0"},
+                        "context_window": 8192,
+                    }
+                ]
+            }
+        )
+        offer = offers[0]
+        self.assertEqual(offer.economics.input_token_price, 0.0)
+        self.assertEqual(offer.economics.output_token_price, 0.0)
+
+    def test_cerebras_missing_prices_stay_unknown_not_free(self) -> None:
+        offers = self._discover(
+            {"data": [{"id": "dedicated-secret", "context_window": 131072}]},
+            groq=False,
+        )
+        self.assertEqual(len(offers), 1)
+        self.assertIsNone(offers[0].economics.input_token_price)
+        self.assertIsNone(offers[0].economics.output_token_price)
+        self.assertFalse(is_free(offers[0]))
+        self.assertEqual(filter_free(offers), [])
+
+
 class LiveMergeTests(unittest.TestCase):
     def test_live_origin_rows_join_unchanged_fixture_catalog(self) -> None:
         live = _offers_from_payload(
