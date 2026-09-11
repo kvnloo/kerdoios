@@ -42,6 +42,7 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 | Unit | `python3 -m unittest tests.test_optimize tests.test_inventory` |
 | Mutation | `n/a` until a mutator is installed; do not invent a score |
 | Runtime | `python3 -m kerdoios plan --workers 8 --mode cheap` |
+| Free seed | `python3 -m kerdoios inventory --free` |
 
 1. Name the intended vs current behavior.
 2. Fail, then pass (see `skills/tdd/SKILL.md`).

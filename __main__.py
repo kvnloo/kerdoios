@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 from kerdoios.explain import explain  # noqa: E402
 from kerdoios.inventory import discover_all  # noqa: E402
 from kerdoios.optimize import plan  # noqa: E402
+from kerdoios.providers.free import is_free  # noqa: E402
 from kerdoios.types import Mode, WorkRequirement  # noqa: E402
 
 
@@ -29,6 +30,23 @@ def _req(ns: argparse.Namespace) -> WorkRequirement:
     )
 
 
+def _inventory_row(offer) -> dict:
+    return {
+        "id": offer.id,
+        "provider": offer.provider,
+        "model": offer.model,
+        "concurrency": offer.capacity.concurrency,
+        "context": offer.capacity.context_window,
+        "source": offer.source,
+        "free": is_free(offer),
+        "prices": {
+            "input": offer.economics.input_token_price,
+            "output": offer.economics.output_token_price,
+        },
+        "tools": list(offer.tools),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kerdoios", description="Hermes Kerdoios — allot scarce compute")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -36,12 +54,14 @@ def main(argv: list[str] | None = None) -> int:
     inv_p = sub.add_parser("inventory", help="Show resource inventory")
     inv_p.add_argument("--live", action="store_true", help="Also query live adapters (OpenRouter public, local, keyed Groq/Cerebras)")
     inv_p.add_argument("--no-fixture", action="store_true", help="Omit the deterministic fixture catalog")
+    inv_p.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
         item.add_argument("--fixture", action="store_true", default=True)
         item.add_argument("--live", action="store_true")
+        item.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
         item.add_argument("--workers", type=int, default=8)
         item.add_argument("--budget", type=float, default=None)
         item.add_argument("--mode", default="cheap", choices=[m.value for m in Mode])
@@ -54,29 +74,18 @@ def main(argv: list[str] | None = None) -> int:
     ns = parser.parse_args(argv)
     include_fixture = True
     live = False
+    free_only = bool(getattr(ns, "free", False))
     if ns.command == "inventory":
         include_fixture = not ns.no_fixture
         live = ns.live
     else:
         live = bool(getattr(ns, "live", False))
-    offers = discover_all(include_fixture=include_fixture, live=live)
+    if free_only:
+        live = True
+        include_fixture = False
+    offers = discover_all(include_fixture=include_fixture, live=live, free_only=free_only)
     if ns.command == "inventory":
-        print(
-            json.dumps(
-                [
-                    {
-                        "id": o.id,
-                        "provider": o.provider,
-                        "model": o.model,
-                        "concurrency": o.capacity.concurrency,
-                        "context": o.capacity.context_window,
-                        "source": o.source,
-                    }
-                    for o in offers
-                ],
-                indent=2,
-            )
-        )
+        print(json.dumps([_inventory_row(o) for o in offers], indent=2))
         return 0
     requirement = _req(ns)
     built = plan(offers, requirement)

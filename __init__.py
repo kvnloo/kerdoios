@@ -10,6 +10,7 @@ from typing import Any
 from .explain import explain
 from .inventory import discover_all
 from .optimize import plan
+from .providers.free import is_free
 from .types import Mode, WorkRequirement
 
 
@@ -39,6 +40,23 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
     )
 
 
+def _inventory_row(offer: Any) -> dict[str, Any]:
+    return {
+        "id": offer.id,
+        "provider": offer.provider,
+        "model": offer.model,
+        "concurrency": offer.capacity.concurrency,
+        "context": offer.capacity.context_window,
+        "source": offer.source,
+        "free": is_free(offer),
+        "prices": {
+            "input": offer.economics.input_token_price,
+            "output": offer.economics.output_token_price,
+        },
+        "tools": list(offer.tools),
+    }
+
+
 PLAN_SCHEMA = {
     "name": "kerdoios_plan",
     "description": (
@@ -59,6 +77,7 @@ PLAN_SCHEMA = {
             "coding": {"type": "number"},
             "reasoning": {"type": "number"},
             "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter public catalog; no fixture mix)"},
         },
     },
 }
@@ -73,6 +92,22 @@ EXPLAIN_SCHEMA = {
             "budget": {"type": "number"},
             "mode": {"type": "string"},
             "privacy": {"type": "string"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list"},
+        },
+    },
+}
+
+INVENTORY_SCHEMA = {
+    "name": "kerdoios_inventory",
+    "description": (
+        "List ResourceOffers. free=true seeds from public free models "
+        "(OpenRouter /models, then the vendored snapshot if the network is empty)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (no fixture mix)"},
         },
     },
 }
@@ -81,7 +116,12 @@ EXPLAIN_SCHEMA = {
 def register(ctx: Any) -> None:
     def _offers(args: dict[str, Any]):
         live = bool(args.get("live"))
-        return discover_all(include_fixture=True, live=live)
+        free_only = bool(args.get("free"))
+        include_fixture = True
+        if free_only:
+            live = True
+            include_fixture = False
+        return discover_all(include_fixture=include_fixture, live=live, free_only=free_only)
 
     def handle_plan(args: dict[str, Any], **kwargs: Any) -> str:
         requirement = _req_from_args(args)
@@ -91,8 +131,12 @@ def register(ctx: Any) -> None:
         requirement = _req_from_args(args)
         return explain(_offers(args), requirement)
 
+    def handle_inventory(args: dict[str, Any], **kwargs: Any) -> str:
+        return json.dumps([_inventory_row(offer) for offer in _offers(args)], indent=2)
+
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
+    ctx.register_tool(name="kerdoios_inventory", toolset="kerdoios", schema=INVENTORY_SCHEMA, handler=handle_inventory)
 
     def _cli(ns: Any) -> None:
         command = getattr(ns, "kerdoios_command", None) or getattr(ns, "command", None)
@@ -101,9 +145,10 @@ def register(ctx: Any) -> None:
         mode = str(getattr(ns, "mode", "balanced") or "balanced")
         privacy = str(getattr(ns, "privacy", "public") or "public")
         live = bool(getattr(ns, "live", False))
-        args = {"workers": workers, "budget": budget, "mode": mode, "privacy": privacy, "live": live}
+        free = bool(getattr(ns, "free", False))
+        args = {"workers": workers, "budget": budget, "mode": mode, "privacy": privacy, "live": live, "free": free}
         if command == "inventory":
-            print(json.dumps([offer.to_dict() for offer in _offers(args)], indent=2, default=str))
+            print(handle_inventory(args))
             return
         if command == "explain":
             print(handle_explain(args))
@@ -115,6 +160,7 @@ def register(ctx: Any) -> None:
         for name in ("inventory", "plan", "explain"):
             p = subs.add_parser(name)
             p.add_argument("--live", action="store_true")
+            p.add_argument("--free", action="store_true")
             if name != "inventory":
                 p.add_argument("--workers", type=int, default=8)
                 p.add_argument("--budget", type=float, default=None)

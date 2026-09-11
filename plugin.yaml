@@ -9,6 +9,7 @@ tags: [cost, routing, compute, pareto, hermes]
 provides_tools:
   - kerdoios_plan
   - kerdoios_explain
+  - kerdoios_inventory
 provides_hooks: []
 config_schema:
   default_mode:

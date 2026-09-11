@@ -65,8 +65,20 @@ hermes plugins doctor ~/.hermes/plugins/kerdoios --ci
 hermes plugins enable kerdoios
 ```
 
-No API keys are required for the fixture inventory used in tests and
-`python3 -m kerdoios plan`. Live adapters are opt-in:
+The critical-path seed is **public free models**. No API keys are required:
+
+```bash
+python3 -m kerdoios inventory --free
+```
+
+`--free` queries OpenRouter's public `/models` catalog and keeps `:free` ids,
+$0/$0 prices, remaining quota/credits, and local endpoints. It does **not**
+mix the 7-row demo fixture. If the network is empty, Kerdoios loads
+`providers/openrouter_free.snapshot.json`. Groq/Cerebras stay env-gated
+(`GROQ_API_KEY` / `CEREBRAS_API_KEY`) and are skipped without a key.
+
+Live adapters without the free filter overlay the full OpenRouter catalog on
+the fixture:
 
 ```bash
 python3 -m kerdoios inventory --live
@@ -80,9 +92,12 @@ keys or a down network return an empty adapter result; planning still uses
 the fixture catalog. This plugin must not ingest Tailscale or portal
 tokens into git.
 
+See [ROADMAP.md](ROADMAP.md) for what is done, in progress, and out of MVP.
+
 ## CLI
 
 ```bash
+python3 -m kerdoios inventory --free
 python3 -m kerdoios inventory
 python3 -m kerdoios inventory --live
 python3 -m kerdoios plan --workers 100 --context 128000 --budget 0.50 --mode cheap

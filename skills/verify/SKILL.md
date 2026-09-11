@@ -4,10 +4,10 @@ Tests are necessary, not sufficient. Generation and verification are separate.
 
 ## Pyramid
 
-1. **Unit** — `python -m pytest` on the touched surface.
+1. **Unit** — `python3 -m unittest tests.test_optimize tests.test_inventory` on the touched surface.
 2. **TDD** — red command, then green command (`skills/tdd/SKILL.md`).
-3. **Mutation** — `mutmut run` if that is not `n/a`. A surviving mutant is a missing assertion. If the stack has no mutator, write `n/a`. Do not invent a score.
-4. **Runtime** — `n/a — project-specific`. If the project has no runtime check, write `n/a` and say what you did not run.
+3. **Mutation** — `n/a`. A surviving mutant is a missing assertion. If the stack has no mutator, write `n/a`. Do not invent a score.
+4. **Runtime** — `python3 -m kerdoios plan --workers 8 --mode cheap`. If you did not run it, write `n/a` and say what you did not run.
 
 ## Receipt
 

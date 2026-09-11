@@ -13,7 +13,9 @@ Fail, then pass. The red command is part of the evidence receipt.
 
 ## Stack
 
-The unit command is detected at onboard time (`python -m pytest`). If that placeholder is still `unknown`, detect the tree (`pyproject.toml`, `package.json`, `Cargo.toml`, `go.mod`) and pin the command in the PR. Do not copy another project's test runner.
+Unit: `python3 -m unittest tests.test_optimize tests.test_inventory`
+
+Do not use pytest. Mutation is `n/a` until a mutator is installed. Runtime check: `python3 -m kerdoios plan --workers 8 --mode cheap`.
 
 ## Do not
 

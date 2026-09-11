@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
+from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
@@ -10,6 +13,7 @@ from .base import ResourceProvider
 from .http import get_json
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
+_SNAPSHOT = Path(__file__).resolve().parent / "openrouter_free.snapshot.json"
 
 
 def _num(value: Any) -> float | None:
@@ -19,6 +23,15 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _supports_tools(item: dict[str, Any]) -> bool:
+    params = item.get("supported_parameters") or []
+    if isinstance(params, dict):
+        keys = params.keys()
+    else:
+        keys = params
+    return "tools" in keys or "tool_choice" in keys
 
 
 def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
@@ -39,6 +52,7 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
         modality = str(arch.get("modality") or "")
         vision = 0.7 if "image" in modality.lower() else 0.0
         free = ":free" in mid.lower() or (inp == 0 and out == 0)
+        has_tools = _supports_tools(item)
         offers.append(
             ResourceOffer(
                 id=f"openrouter/{mid}",
@@ -49,7 +63,7 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
                 capabilities=CapabilityProfile(
                     reasoning=0.68 if free else 0.80,
                     coding=0.70 if free else 0.82,
-                    tool_use=0.85,
+                    tool_use=0.85 if has_tools else 0.2,
                     vision=vision,
                     provenance="provider_claim",
                 ),
@@ -60,7 +74,7 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
                     remaining_free_quota=50_000.0 if free else 0.0,
                 ),
                 telemetry=Telemetry(latency_p50_ms=900.0 if free else 600.0),
-                tools=("github", "*"),
+                tools=("*",) if has_tools else (),
                 source="openrouter:/api/v1/models",
                 confidence=0.7,
             )
@@ -74,6 +88,14 @@ def discover(*, api_key: str | None = None) -> list[ResourceOffer]:
     if not payload:
         return []
     return _offers_from_payload(payload)
+
+
+def discover_snapshot() -> list[ResourceOffer]:
+    try:
+        payload = json.loads(_SNAPSHOT.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [replace(o, source="openrouter:snapshot", confidence=0.55) for o in _offers_from_payload(payload)]
 
 
 class OpenRouterProvider(ResourceProvider):
