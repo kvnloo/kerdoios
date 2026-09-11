@@ -10,4 +10,5 @@ provides_tools:
   - kerdoios_plan
   - kerdoios_explain
   - kerdoios_inventory
+  - kerdoios_record
 provides_hooks: []
