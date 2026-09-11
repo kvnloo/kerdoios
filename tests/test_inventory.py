@@ -44,6 +44,62 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertEqual(paid.capacity.context_window, 200000)
         self.assertEqual(free.tools, ("*",))
         self.assertEqual(paid.tools, ("*",))
+        self.assertEqual(free.provider, "meta")
+        self.assertEqual(paid.provider, "openai")
+        self.assertEqual(free.source, "openrouter:/api/v1/models")
+        self.assertEqual(paid.source, "openrouter:/api/v1/models")
+        self.assertEqual(free.model, "meta/llama:free")
+        self.assertEqual(paid.model, "openai/gpt-x")
+        self.assertEqual(free.id, "meta/meta/llama:free")
+        self.assertEqual(paid.id, "openai/openai/gpt-x")
+
+    def test_origin_providers_from_nvidia_and_google_free_ids(self) -> None:
+        payload = {
+            "data": [
+                {
+                    "id": "nvidia/nemotron-3-nano:free",
+                    "context_length": 128000,
+                    "pricing": {"prompt": "0", "completion": "0"},
+                    "architecture": {"modality": "text"},
+                    "supported_parameters": ["tools", "tool_choice"],
+                },
+                {
+                    "id": "google/gemma-4-31b-it:free",
+                    "context_length": 131072,
+                    "pricing": {"prompt": "0", "completion": "0"},
+                    "architecture": {"modality": "text"},
+                    "supported_parameters": ["tools", "tool_choice"],
+                },
+            ]
+        }
+        offers = _offers_from_payload(payload)
+        self.assertEqual(len(offers), 2)
+        providers = {o.provider for o in offers}
+        self.assertEqual(providers, {"nvidia", "google"})
+        self.assertNotIn("openrouter", providers)
+        nvidia = next(o for o in offers if o.provider == "nvidia")
+        google = next(o for o in offers if o.provider == "google")
+        self.assertEqual(nvidia.model, "nvidia/nemotron-3-nano:free")
+        self.assertEqual(google.model, "google/gemma-4-31b-it:free")
+        self.assertEqual(nvidia.source, "openrouter:/api/v1/models")
+        self.assertEqual(google.source, "openrouter:/api/v1/models")
+        self.assertEqual(nvidia.id, "nvidia/nvidia/nemotron-3-nano:free")
+        self.assertEqual(google.id, "google/google/gemma-4-31b-it:free")
+
+        with (
+            patch("kerdoios.inventory.openrouter.discover", return_value=offers),
+            patch("kerdoios.inventory.discover_groq", return_value=[]),
+            patch("kerdoios.inventory.discover_cerebras", return_value=[]),
+            patch("kerdoios.inventory.local.discover", return_value=[]),
+        ):
+            inventory = discover_all(include_fixture=True, live=True)
+            discovered = discover_all(include_fixture=False, live=True, free_only=True)
+
+        inv_origins = {o.provider for o in inventory if o.source == "openrouter:/api/v1/models"}
+        disc_origins = {o.provider for o in discovered if o.source == "openrouter:/api/v1/models"}
+        self.assertEqual(inv_origins, {"nvidia", "google"})
+        self.assertEqual(disc_origins, {"nvidia", "google"})
+        self.assertTrue(any(o.id == "openrouter/free" and o.provider == "openrouter" for o in inventory))
 
     def test_discover_returns_empty_on_network_failure(self) -> None:
         with patch("kerdoios.providers.openrouter.get_json", return_value=None):
@@ -104,7 +160,7 @@ class FreeFilterTests(unittest.TestCase):
 
 
 class LiveMergeTests(unittest.TestCase):
-    def test_live_openrouter_replaces_fixture_clone(self) -> None:
+    def test_live_origin_rows_join_unchanged_fixture_catalog(self) -> None:
         live = _offers_from_payload(
             {
                 "data": [
@@ -125,9 +181,14 @@ class LiveMergeTests(unittest.TestCase):
             patch("kerdoios.inventory.local.discover", return_value=[]),
         ):
             merged = discover_all(include_fixture=True, live=True)
-        or_free = [o for o in merged if o.provider == "openrouter" and o.model == "free-pool"]
-        self.assertEqual(len(or_free), 1)
-        self.assertEqual(or_free[0].source, "openrouter:/api/v1/models")
+        live_rows = [o for o in merged if o.model == "free-pool" and o.source == "openrouter:/api/v1/models"]
+        self.assertEqual(len(live_rows), 1)
+        self.assertEqual(live_rows[0].provider, "free-pool")
+        self.assertEqual(live_rows[0].source, "openrouter:/api/v1/models")
+        fixture_pool = [o for o in merged if o.id == "openrouter/free"]
+        self.assertEqual(len(fixture_pool), 1)
+        self.assertEqual(fixture_pool[0].provider, "openrouter")
+        self.assertEqual(fixture_pool[0].source, "fixture")
 
     def test_free_only_uses_snapshot_when_live_empty(self) -> None:
         with (
@@ -137,9 +198,12 @@ class LiveMergeTests(unittest.TestCase):
             patch("kerdoios.inventory.local.discover", return_value=[]),
         ):
             rows = discover_all(include_fixture=False, live=True, free_only=True)
-        or_rows = [o for o in rows if o.provider == "openrouter"]
-        self.assertGreaterEqual(len(or_rows), 10)
-        self.assertTrue(all(o.source == "openrouter:snapshot" for o in or_rows))
+        snap_rows = [o for o in rows if o.source == "openrouter:snapshot"]
+        self.assertGreaterEqual(len(snap_rows), 10)
+        self.assertTrue(all(o.source == "openrouter:snapshot" for o in snap_rows))
+        origins = {o.provider for o in snap_rows}
+        self.assertIn("google", origins)
+        self.assertIn("nvidia", origins)
         self.assertFalse(any(o.source == "fixture" for o in rows))
 
 
