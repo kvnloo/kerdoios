@@ -38,7 +38,7 @@ class RegisterTests(unittest.TestCase):
         register(ctx)
         self.assertEqual(
             set(ctx.tools),
-            {"kerdoios_plan", "kerdoios_explain", "kerdoios_inventory", "kerdoios_record"},
+            {"kerdoios_plan", "kerdoios_explain", "kerdoios_inventory", "kerdoios_record", "kerdoios_bench"},
         )
         self.assertEqual(ctx.tools["kerdoios_record"]["toolset"], "kerdoios")
         self.assertEqual(ctx.tools["kerdoios_record"]["schema"]["name"], "kerdoios_record")

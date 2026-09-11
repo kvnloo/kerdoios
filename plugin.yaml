@@ -11,4 +11,5 @@ provides_tools:
   - kerdoios_explain
   - kerdoios_inventory
   - kerdoios_record
+  - kerdoios_bench
 provides_hooks: []

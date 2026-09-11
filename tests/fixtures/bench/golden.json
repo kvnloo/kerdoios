@@ -1,0 +1,47 @@
+{
+  "comment": "Frozen planner-bench golden. Do not regenerate with a live LLM.",
+  "astra_offer_id": "frontier/paid",
+  "heads": [
+    {
+      "id": "cheap-100",
+      "estimated_tokens": 480000,
+      "estimated_cost": 0.392688,
+      "frontier_tokens": 86400,
+      "frontier_token_share": 0.18,
+      "unplaced_workers": 0,
+      "quality_floor": 0.760563,
+      "astra_offer_id": "frontier/paid",
+      "placed_workers": 100
+    },
+    {
+      "id": "bulk-8",
+      "estimated_tokens": 38400,
+      "estimated_cost": 0.0,
+      "frontier_tokens": 0,
+      "frontier_token_share": 0.0,
+      "unplaced_workers": 0,
+      "quality_floor": 0.81338,
+      "astra_offer_id": "frontier/paid",
+      "placed_workers": 8
+    },
+    {
+      "id": "astra-overflow",
+      "estimated_tokens": 38400,
+      "estimated_cost": 0.174528,
+      "frontier_tokens": 38400,
+      "frontier_token_share": 1.0,
+      "unplaced_workers": 0,
+      "quality_floor": 1.0,
+      "astra_offer_id": "frontier/paid",
+      "placed_workers": 8
+    }
+  ],
+  "totals": {
+    "estimated_tokens": 556800,
+    "estimated_cost": 0.567216,
+    "frontier_tokens": 124800,
+    "frontier_token_share": 0.224138,
+    "unplaced_workers": 0,
+    "quality_floor": 0.760563
+  }
+}

@@ -6,6 +6,8 @@ Humans and coding agents work on this repository together. This file is how to *
 
 See the README for install, run, and configuration. Do not commit secrets.
 
+Contributor default for planner token spend vs the Astra-class offer: `python3 -m kerdoios bench` (frozen `tests/fixtures/bench/`, no keys, no POST).
+
 ## Contribute
 
 ### Autodevelop (agents)

@@ -1,0 +1,50 @@
+{
+  "comment": "Frozen planner-bench task suite. Do not regenerate with a live LLM.",
+  "tasks": [
+    {
+      "id": "cheap-100",
+      "coding": 0.7,
+      "reasoning": 0.6,
+      "tool_use": true,
+      "tools": [
+        "github"
+      ],
+      "context": 128000,
+      "parallelism": 100,
+      "maximum_cost": 0.5,
+      "mode": "cheap",
+      "estimated_input_tokens": 4000,
+      "estimated_output_tokens": 800
+    },
+    {
+      "id": "bulk-8",
+      "coding": 0.7,
+      "reasoning": 0.6,
+      "tool_use": true,
+      "tools": [
+        "github"
+      ],
+      "context": 128000,
+      "parallelism": 8,
+      "maximum_cost": null,
+      "mode": "cheap",
+      "estimated_input_tokens": 4000,
+      "estimated_output_tokens": 800
+    },
+    {
+      "id": "astra-overflow",
+      "coding": 0.94,
+      "reasoning": 0.93,
+      "tool_use": true,
+      "tools": [
+        "github"
+      ],
+      "context": 128000,
+      "parallelism": 8,
+      "maximum_cost": null,
+      "mode": "cheap",
+      "estimated_input_tokens": 4000,
+      "estimated_output_tokens": 800
+    }
+  ]
+}

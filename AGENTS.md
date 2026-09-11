@@ -43,6 +43,7 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 | Unit | `python3 -m unittest discover -s tests` |
 | Mutation | `n/a` until a mutator is installed; do not invent a score |
 | Runtime | `python3 -m kerdoios plan --workers 8 --mode cheap` |
+| Bench | `python3 -m kerdoios bench` |
 | Free seed | `python3 -m kerdoios inventory --free` |
 
 1. Name the intended vs current behavior.
@@ -74,3 +75,10 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 - Duplicate `AGENTS.md` into `CLAUDE.md` / `GEMINI.md` / copilot-instructions.
 - Run `gitnexus analyze` as a side effect of a claim.
 - Dump the pstack plugin or Dr Eggbot marketplace pack into this tree. Pointers: `skills/pstack/SKILL.md`, `skills/dr-eggbot/SKILL.md`.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.

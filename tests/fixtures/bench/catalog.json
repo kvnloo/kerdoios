@@ -1,0 +1,347 @@
+{
+  "comment": "Frozen planner-bench catalog. Do not regenerate with a live LLM.",
+  "astra_offer_id": "frontier/paid",
+  "offers": [
+    {
+      "id": "groq/free-70b",
+      "provider": "groq",
+      "resource_type": "llm",
+      "model": "llama-3.3-70b",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.72,
+        "coding": 0.7,
+        "tool_use": 0.9,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 20,
+        "context_window": 128000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 80000,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": 36000,
+        "seconds_until_credits_expire": null
+      },
+      "telemetry": {
+        "latency_p50_ms": 280,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.03,
+        "availability": 0.99
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.7
+    },
+    {
+      "id": "cerebras/free-coder",
+      "provider": "cerebras",
+      "resource_type": "llm",
+      "model": "qwen-coder",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.68,
+        "coding": 0.78,
+        "tool_use": 0.85,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 20,
+        "context_window": 128000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 50000,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": 86400,
+        "seconds_until_credits_expire": null
+      },
+      "telemetry": {
+        "latency_p50_ms": 190,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.04,
+        "availability": 0.98
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.65
+    },
+    {
+      "id": "openrouter/free",
+      "provider": "openrouter",
+      "resource_type": "llm",
+      "model": "free-pool",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.66,
+        "coding": 0.7,
+        "tool_use": 0.8,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 30,
+        "context_window": 128000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 120000,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": null,
+        "seconds_until_credits_expire": 172800
+      },
+      "telemetry": {
+        "latency_p50_ms": 900,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.08,
+        "availability": 0.96
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.55
+    },
+    {
+      "id": "local/qwen-32b",
+      "provider": "local",
+      "resource_type": "llm",
+      "model": "qwen-32b",
+      "local": true,
+      "capabilities": {
+        "reasoning": 0.74,
+        "coding": 0.76,
+        "tool_use": 0.88,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 4,
+        "context_window": 128000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 0.0,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": null,
+        "seconds_until_credits_expire": null
+      },
+      "telemetry": {
+        "latency_p50_ms": 1200,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.01,
+        "availability": 0.995
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential",
+        "local_only"
+      ],
+      "source": "fixture",
+      "confidence": 0.8
+    },
+    {
+      "id": "nous/hermes-70b",
+      "provider": "nous-portal",
+      "resource_type": "llm",
+      "model": "hermes-4-70b",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.8,
+        "coding": 0.78,
+        "tool_use": 0.92,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 8,
+        "context_window": 128000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 0.0,
+        "remaining_credits": 5.0,
+        "seconds_until_quota_reset": null,
+        "seconds_until_credits_expire": 604800
+      },
+      "telemetry": {
+        "latency_p50_ms": 450,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.02,
+        "availability": 0.99
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.75
+    },
+    {
+      "id": "frontier/paid",
+      "provider": "paid-api",
+      "resource_type": "llm",
+      "model": "frontier-codex",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.93,
+        "coding": 0.94,
+        "tool_use": 0.97,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 50,
+        "context_window": 200000,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": 3e-06,
+        "output_token_price": 1.2e-05,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 0.0,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": null,
+        "seconds_until_credits_expire": null
+      },
+      "telemetry": {
+        "latency_p50_ms": 520,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.01,
+        "availability": 0.995
+      },
+      "tools": [
+        "github",
+        "*"
+      ],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.9
+    },
+    {
+      "id": "tiny/8k-no-tools",
+      "provider": "openrouter",
+      "resource_type": "llm",
+      "model": "tiny-8k",
+      "local": false,
+      "capabilities": {
+        "reasoning": 0.4,
+        "coding": 0.35,
+        "tool_use": 0.1,
+        "vision": 0.0,
+        "provenance": "fixture"
+      },
+      "capacity": {
+        "requests_per_minute": null,
+        "tokens_per_minute": null,
+        "tokens_per_day": null,
+        "concurrency": 100,
+        "context_window": 8192,
+        "cpu_cores": null,
+        "ram_gb": null,
+        "vram_gb": null
+      },
+      "economics": {
+        "input_token_price": null,
+        "output_token_price": null,
+        "hourly_price": 0.0,
+        "remaining_free_quota": 0.0,
+        "remaining_credits": 0.0,
+        "seconds_until_quota_reset": null,
+        "seconds_until_credits_expire": null
+      },
+      "telemetry": {
+        "latency_p50_ms": 200,
+        "latency_p95_ms": 2000.0,
+        "failure_rate": 0.05,
+        "availability": 0.9
+      },
+      "tools": [],
+      "privacy_ok": [
+        "public",
+        "confidential"
+      ],
+      "source": "fixture",
+      "confidence": 0.4
+    }
+  ]
+}
