@@ -128,8 +128,8 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertEqual(paid.source, "openrouter:/api/v1/models")
         self.assertEqual(free.model, "meta/llama:free")
         self.assertEqual(paid.model, "openai/gpt-x")
-        self.assertEqual(free.id, "meta/meta/llama:free")
-        self.assertEqual(paid.id, "openai/openai/gpt-x")
+        self.assertEqual(free.id, "meta/llama:free")
+        self.assertEqual(paid.id, "openai/gpt-x")
 
     def test_origin_providers_from_nvidia_and_google_free_ids(self) -> None:
         payload = {
@@ -161,8 +161,8 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertEqual(google.model, "google/gemma-4-31b-it:free")
         self.assertEqual(nvidia.source, "openrouter:/api/v1/models")
         self.assertEqual(google.source, "openrouter:/api/v1/models")
-        self.assertEqual(nvidia.id, "nvidia/nvidia/nemotron-3-nano:free")
-        self.assertEqual(google.id, "google/google/gemma-4-31b-it:free")
+        self.assertEqual(nvidia.id, "nvidia/nemotron-3-nano:free")
+        self.assertEqual(google.id, "google/gemma-4-31b-it:free")
 
         with tempfile.TemporaryDirectory() as tmp:
             env = {**os.environ, "KERDOIOS_CACHE": tmp}
