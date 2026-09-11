@@ -54,7 +54,8 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertEqual(len(offers), 2)
         free = next(o for o in offers if o.model == "meta/llama:free")
         paid = next(o for o in offers if o.model == "openai/gpt-x")
-        self.assertEqual(free.economics.remaining_free_quota, 50_000.0)
+        # Catalog mapping has no rate-limit headers; do not invent a sticker quota.
+        self.assertEqual(free.economics.remaining_free_quota, 0.0)
         self.assertEqual(free.economics.input_token_price, 0.0)
         self.assertGreater(paid.economics.input_token_price, 0.0)
         self.assertGreaterEqual(paid.capabilities.vision, 0.5)
@@ -122,7 +123,7 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertTrue(any(o.id == "openrouter/free" and o.provider == "openrouter" for o in inventory))
 
     def test_discover_returns_empty_on_network_failure(self) -> None:
-        with patch("kerdoios.providers.openrouter.get_json", return_value=None):
+        with patch("kerdoios.providers.openrouter.get_json_response", return_value=None):
             self.assertEqual(or_discover(api_key=None), [])
 
     def test_groq_skips_without_key(self) -> None:

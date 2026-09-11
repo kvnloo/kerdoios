@@ -10,7 +10,7 @@ from typing import Any
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
 from .base import ResourceProvider
-from .http import get_json
+from .http import get_json_response, quota_from_headers
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
 _SNAPSHOT = Path(__file__).resolve().parent / "openrouter_free.snapshot.json"
@@ -34,7 +34,12 @@ def _supports_tools(item: dict[str, Any]) -> bool:
     return "tools" in keys or "tool_choice" in keys
 
 
-def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
+def _offers_from_payload(
+    payload: dict[str, Any],
+    *,
+    remaining_free_quota: float | None = None,
+    seconds_until_quota_reset: float | None = None,
+) -> list[ResourceOffer]:
     offers: list[ResourceOffer] = []
     for item in payload.get("data") or []:
         mid = str(item.get("id") or "")
@@ -54,6 +59,9 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
         free = ":free" in mid.lower() or (inp == 0 and out == 0)
         has_tools = _supports_tools(item)
         origin = mid.split("/", 1)[0] or "openrouter"
+        # Paid rows must not inherit rate-limit remaining; that field would mark them free.
+        row_quota = remaining_free_quota if free and remaining_free_quota is not None else 0.0
+        row_reset = seconds_until_quota_reset if free and remaining_free_quota is not None else None
         offers.append(
             ResourceOffer(
                 id=f"{origin}/{mid}",
@@ -72,7 +80,8 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
                 economics=Economics(
                     input_token_price=inp or 0.0,
                     output_token_price=out or 0.0,
-                    remaining_free_quota=50_000.0 if free else 0.0,
+                    remaining_free_quota=row_quota,
+                    seconds_until_quota_reset=row_reset,
                 ),
                 telemetry=Telemetry(latency_p50_ms=900.0 if free else 600.0),
                 tools=("*",) if has_tools else (),
@@ -85,10 +94,18 @@ def _offers_from_payload(payload: dict[str, Any]) -> list[ResourceOffer]:
 
 def discover(*, api_key: str | None = None) -> list[ResourceOffer]:
     key = api_key if api_key is not None else os.environ.get("OPENROUTER_API_KEY")
-    payload = get_json(OPENROUTER_MODELS, api_key=key)
-    if not payload:
+    fetched = get_json_response(OPENROUTER_MODELS, api_key=key)
+    if not fetched:
         return []
-    return _offers_from_payload(payload)
+    remaining = None
+    reset = None
+    if key:
+        remaining, reset = quota_from_headers(fetched.headers)
+    return _offers_from_payload(
+        fetched.body,
+        remaining_free_quota=remaining,
+        seconds_until_quota_reset=reset,
+    )
 
 
 def discover_snapshot() -> list[ResourceOffer]:
