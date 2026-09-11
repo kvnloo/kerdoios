@@ -77,7 +77,7 @@ PLAN_SCHEMA = {
             "coding": {"type": "number"},
             "reasoning": {"type": "number"},
             "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
-            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter public catalog; no fixture mix)"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier; no fixture mix)"},
         },
     },
 }
@@ -92,7 +92,7 @@ EXPLAIN_SCHEMA = {
             "budget": {"type": "number"},
             "mode": {"type": "string"},
             "privacy": {"type": "string"},
-            "free": {"type": "boolean", "description": "Keep free models as the initial list"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter plus keyed Groq/Cerebras free-tier)"},
         },
     },
 }
@@ -101,13 +101,14 @@ INVENTORY_SCHEMA = {
     "name": "kerdoios_inventory",
     "description": (
         "List ResourceOffers. free=true seeds from public free models "
-        "(cache, then OpenRouter /models, then the vendored snapshot if cache and network are empty)."
+        "(cache, then OpenRouter /models, then the vendored snapshot if cache and OpenRouter are empty; "
+        "keyed Groq/Cerebras free-tier overlays when those env keys exist)."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
-            "free": {"type": "boolean", "description": "Keep free models as the initial list (no fixture mix)"},
+            "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter plus keyed Groq/Cerebras free-tier; no fixture mix)"},
             "refresh": {"type": "boolean", "description": "Bypass inventory cache and fetch live OpenRouter"},
         },
     },

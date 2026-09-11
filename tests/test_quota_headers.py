@@ -7,7 +7,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT.parent))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from kerdoios.providers.http import quota_from_headers
 from kerdoios.providers.openai_compat import discover_cerebras, discover_groq
