@@ -128,20 +128,14 @@ def _catalog(
         except (TypeError, ValueError):
             ctx_i = 128_000
         inp, out = _catalog_prices(item)
-        if free_tier:
-            economics = Economics(
-                input_token_price=inp if inp is not None else 0.0,
-                output_token_price=out if out is not None else 0.0,
-                remaining_free_quota=free_quota,
-                seconds_until_quota_reset=reset,
-            )
-        else:
-            economics = Economics(
-                input_token_price=inp or 0.0,
-                output_token_price=out or 0.0,
-                remaining_free_quota=free_quota,
-                seconds_until_quota_reset=reset,
-            )
+        economics = Economics(
+            # Missing prompt/completion is unknown. `or 0.0` would
+            # turn that into a fake $0 chat tier.
+            input_token_price=inp,
+            output_token_price=out,
+            remaining_free_quota=free_quota,
+            seconds_until_quota_reset=reset,
+        )
         offers.append(
             ResourceOffer(
                 id=f"{provider}/{mid}",
