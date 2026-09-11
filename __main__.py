@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from kerdoios.explain import explain  # noqa: E402
 from kerdoios.inventory import discover_all  # noqa: E402
+from kerdoios.observed import Observation, record  # noqa: E402
 from kerdoios.optimize import plan  # noqa: E402
 from kerdoios.providers.free import is_free  # noqa: E402
 from kerdoios.types import Mode, WorkRequirement  # noqa: E402
@@ -62,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         item.add_argument("--fixture", action="store_true", default=True)
         item.add_argument("--live", action="store_true")
         item.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
+        item.add_argument("--observed", action="store_true", help="Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)")
         item.add_argument("--workers", type=int, default=8)
         item.add_argument("--budget", type=float, default=None)
         item.add_argument("--mode", default="cheap", choices=[m.value for m in Mode])
@@ -71,7 +73,27 @@ def main(argv: list[str] | None = None) -> int:
         item.add_argument("--reasoning", type=float, default=0.6)
         item.add_argument("--no-tools", action="store_true")
 
+    record_p = sub.add_parser("record", help="Log an observed execution outcome")
+    record_p.add_argument("--provider", required=True)
+    record_p.add_argument("--model", required=True)
+    record_p.add_argument("--task-type", default="unknown")
+    record_p.add_argument("--completed", action="store_true")
+    record_p.add_argument("--cost", type=float, default=0.0)
+    record_p.add_argument("--retried", action="store_true")
+
     ns = parser.parse_args(argv)
+    if ns.command == "record":
+        record(
+            Observation(
+                provider=ns.provider,
+                model=ns.model,
+                task_type=ns.task_type,
+                completed=ns.completed,
+                actual_cost=ns.cost,
+                retried=ns.retried,
+            )
+        )
+        return 0
     include_fixture = True
     live = False
     free_only = bool(getattr(ns, "free", False))
@@ -88,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps([_inventory_row(o) for o in offers], indent=2))
         return 0
     requirement = _req(ns)
-    built = plan(offers, requirement)
+    built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":
         print(explain(offers, requirement, built))
         return 0

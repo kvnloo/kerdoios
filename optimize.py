@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .blend import apply_observed
 from .pareto import nondominated
 from .presets import PRESETS
 from .score import ScoredOffer, capability_fit, score
@@ -87,7 +88,9 @@ def allocate(offers: list[ScoredOffer], req: WorkRequirement) -> tuple[list[Plac
     return placements, remaining
 
 
-def plan(offers: list[ResourceOffer], req: WorkRequirement) -> ExecutionPlan:
+def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: bool = False) -> ExecutionPlan:
+    if use_observed:
+        offers = apply_observed(offers)
     eligible, rejections = hard_filter(offers, req)
     weights = PRESETS[req.mode]
     scored = [score(offer, req, weights) for offer in eligible]
