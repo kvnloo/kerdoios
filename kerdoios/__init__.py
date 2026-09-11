@@ -9,6 +9,7 @@ from typing import Any
 
 from .explain import explain
 from .inventory import discover_all
+from .observed import Observation, record
 from .optimize import plan
 from .providers.free import is_free
 from .types import Mode, PrivacyClass, WorkRequirement
@@ -82,6 +83,10 @@ PLAN_SCHEMA = {
             "reasoning": {"type": "number"},
             "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
             "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier; no fixture mix)"},
+            "observed": {
+                "type": "boolean",
+                "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
+            },
         },
     },
 }
@@ -97,6 +102,10 @@ EXPLAIN_SCHEMA = {
             "mode": {"type": "string"},
             "privacy": {"type": "string"},
             "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter plus keyed Groq/Cerebras free-tier)"},
+            "observed": {
+                "type": "boolean",
+                "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
+            },
         },
     },
 }
@@ -115,6 +124,23 @@ INVENTORY_SCHEMA = {
             "free": {"type": "boolean", "description": "Keep free models as the initial list (OpenRouter plus keyed Groq/Cerebras free-tier; no fixture mix)"},
             "refresh": {"type": "boolean", "description": "Bypass inventory cache and fetch live OpenRouter"},
         },
+    },
+}
+
+RECORD_SCHEMA = {
+    "name": "kerdoios_record",
+    "description": "Log an observed execution outcome.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "provider": {"type": "string"},
+            "model": {"type": "string"},
+            "task_type": {"type": "string", "description": "Caller-controlled bucket (default unknown)"},
+            "completed": {"type": "boolean"},
+            "cost": {"type": "number", "description": "Actual cost in USD"},
+            "retried": {"type": "boolean"},
+        },
+        "required": ["provider", "model"],
     },
 }
 
@@ -137,21 +163,57 @@ def register(ctx: Any) -> None:
 
     def handle_plan(args: dict[str, Any], **kwargs: Any) -> str:
         requirement = _req_from_args(args)
-        return json.dumps(plan(_offers(args), requirement).to_dict(), indent=2)
+        return json.dumps(
+            plan(_offers(args), requirement, use_observed=bool(args.get("observed"))).to_dict(),
+            indent=2,
+        )
 
     def handle_explain(args: dict[str, Any], **kwargs: Any) -> str:
         requirement = _req_from_args(args)
-        return explain(_offers(args), requirement)
+        return explain(_offers(args), requirement, use_observed=bool(args.get("observed")))
 
     def handle_inventory(args: dict[str, Any], **kwargs: Any) -> str:
         return json.dumps([_inventory_row(offer) for offer in _offers(args)], indent=2)
 
+    def handle_record(args: dict[str, Any], **kwargs: Any) -> str:
+        provider = str(args.get("provider") or "").strip()
+        model = str(args.get("model") or "").strip()
+        if not provider or not model:
+            raise ValueError("kerdoios_record requires provider and model")
+        cost_raw = args.get("cost")
+        actual_cost = 0.0 if cost_raw is None or cost_raw == "" else float(cost_raw)
+        observation = Observation(
+            provider=provider,
+            model=model,
+            task_type=str(args.get("task_type") or "unknown"),
+            completed=bool(args.get("completed")),
+            actual_cost=actual_cost,
+            retried=bool(args.get("retried")),
+        )
+        record(observation)
+        return json.dumps(observation.to_dict(), indent=2)
+
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
     ctx.register_tool(name="kerdoios_inventory", toolset="kerdoios", schema=INVENTORY_SCHEMA, handler=handle_inventory)
+    ctx.register_tool(name="kerdoios_record", toolset="kerdoios", schema=RECORD_SCHEMA, handler=handle_record)
 
     def _cli(ns: Any) -> None:
         command = getattr(ns, "kerdoios_command", None) or getattr(ns, "command", None)
+        if command == "record":
+            print(
+                handle_record(
+                    {
+                        "provider": getattr(ns, "provider", None),
+                        "model": getattr(ns, "model", None),
+                        "task_type": getattr(ns, "task_type", "unknown"),
+                        "completed": bool(getattr(ns, "completed", False)),
+                        "cost": getattr(ns, "cost", 0.0),
+                        "retried": bool(getattr(ns, "retried", False)),
+                    }
+                )
+            )
+            return
         workers = int(getattr(ns, "workers", 8) or 8)
         budget = getattr(ns, "budget", None)
         mode = str(getattr(ns, "mode", "balanced") or "balanced")
@@ -167,6 +229,7 @@ def register(ctx: Any) -> None:
             "live": live,
             "free": free,
             "refresh": refresh,
+            "observed": bool(getattr(ns, "observed", False)),
         }
         if command == "inventory":
             print(handle_inventory(args))
@@ -189,6 +252,14 @@ def register(ctx: Any) -> None:
                 p.add_argument("--budget", type=float, default=None)
                 p.add_argument("--mode", default="balanced")
                 p.add_argument("--privacy", default="public")
+                p.add_argument("--observed", action="store_true")
+        record_p = subs.add_parser("record")
+        record_p.add_argument("--provider", required=True)
+        record_p.add_argument("--model", required=True)
+        record_p.add_argument("--task-type", default="unknown")
+        record_p.add_argument("--completed", action="store_true")
+        record_p.add_argument("--cost", type=float, default=0.0)
+        record_p.add_argument("--retried", action="store_true")
         subparser.set_defaults(func=_cli)
 
     if hasattr(ctx, "register_cli_command"):
