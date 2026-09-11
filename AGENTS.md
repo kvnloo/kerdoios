@@ -39,7 +39,7 @@ Commands were filled by `init-oss-repo.sh` / `oss-onboard` from the tree it saw.
 
 | Layer | Command |
 |---|---|
-| Unit | `python3 -m unittest tests.test_optimize tests.test_inventory` |
+| Unit | `python3 -m unittest discover -s tests` |
 | Mutation | `n/a` until a mutator is installed; do not invent a score |
 | Runtime | `python3 -m kerdoios plan --workers 8 --mode cheap` |
 | Free seed | `python3 -m kerdoios inventory --free` |

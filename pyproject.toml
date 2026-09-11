@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_backend"
+
+[project]
+name = "kerdoios"
+version = "0.1.0"
+description = "Hermes Kerdoios — allot scarce compute so the work can become real"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Kevin Rajan" }]
+keywords = ["hermes", "cost", "routing", "compute", "pareto"]
+
+[project.urls]
+Homepage = "https://github.com/kvnloo/kerdoios"
+
+[project.scripts]
+kerdoios = "kerdoios.__main__:main"
+
+[tool.setuptools]
+packages = ["kerdoios", "kerdoios.providers"]
+
+[tool.setuptools.package-data]
+"kerdoios.providers" = ["*.json"]

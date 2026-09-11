@@ -13,7 +13,7 @@ Fail, then pass. The red command is part of the evidence receipt.
 
 ## Stack
 
-Unit: `python3 -m unittest tests.test_optimize tests.test_inventory`
+Unit: `python3 -m unittest discover -s tests`
 
 Do not use pytest. Mutation is `n/a` until a mutator is installed. Runtime check: `python3 -m kerdoios plan --workers 8 --mode cheap`.
 
