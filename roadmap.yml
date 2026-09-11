@@ -1,0 +1,20 @@
+roadmap_revision: fd34a48a3584548696a3fe08a5bb80038be78618
+updated_at: 2026-09-11T16:34:14Z
+owners: [kvnloo]
+items:
+  - issue: 1
+    priority: P0
+    acceptance: tests/test_inventory.py cache load/save/TTL; ~/.cache/kerdoios/inventory.json; KERDOIOS_CACHE; --refresh
+    claimable: true
+  - issue: 2
+    priority: P1
+    acceptance: unittest 2-provider OpenRouter payload; provider is origin slug; source stays OpenRouter
+    claimable: true
+  - issue: 3
+    priority: P1
+    acceptance: pyproject.toml; unittest and python3 -m kerdoios from any checkout name; do not shadow stdlib types
+    claimable: true
+  - issue: 4
+    priority: P2
+    acceptance: .github/workflows/test.yml runs AGENTS.md unit command on PRs; no merge bot
+    claimable: true
