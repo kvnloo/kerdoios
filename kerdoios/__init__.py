@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
+from .doctor import inspect, require_vault
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -123,7 +124,7 @@ INVENTORY_SCHEMA = {
     "description": (
         "List ResourceOffers. free=true seeds from public free models "
         "(cache, then OpenRouter /models, then the vendored snapshot if cache and OpenRouter are empty; "
-        "keyed Groq/Cerebras free-tier overlays when those env keys exist)."
+        "keyed Groq/Cerebras free-tier overlays when those vault secrets resolve)."
     ),
     "parameters": {
         "type": "object",
@@ -154,6 +155,8 @@ RECORD_SCHEMA = {
 
 
 def register(ctx: Any) -> None:
+    # hermes plugins doctor / enable load this path. Fail closed without vault.
+    require_vault()
     def _offers(args: dict[str, Any]):
         live = bool(args.get("live"))
         free_only = bool(args.get("free"))
@@ -228,6 +231,12 @@ def register(ctx: Any) -> None:
                 )
             )
             return
+        if command == "doctor":
+            report = inspect()
+            print(json.dumps(report.to_dict(), indent=2))
+            if not report.ok:
+                raise SystemExit(1)
+            return
         workers = int(getattr(ns, "workers", 8) or 8)
         budget = getattr(ns, "budget", None)
         mode = str(getattr(ns, "mode", "balanced") or "balanced")
@@ -257,8 +266,10 @@ def register(ctx: Any) -> None:
 
     def _setup(subparser: Any) -> None:
         subs = subparser.add_subparsers(dest="kerdoios_command")
-        for name in ("inventory", "plan", "explain"):
+        for name in ("inventory", "plan", "explain", "doctor"):
             p = subs.add_parser(name)
+            if name == "doctor":
+                continue
             p.add_argument("--live", action="store_true")
             p.add_argument("--free", action="store_true")
             if name == "inventory":

@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 from kerdoios.providers.http import quota_from_headers
 from kerdoios.providers.openai_compat import discover_cerebras, discover_groq
 from kerdoios.providers.openrouter import discover as or_discover
+from kerdoios.vault import UnconfiguredResolver, override_resolver
 
 
 # Captured header maps only. No live keys, tokens, or Authorization values.
@@ -171,20 +172,21 @@ class AdapterHeaderTests(unittest.TestCase):
     def test_openrouter_without_key_ignores_headers(self) -> None:
         fake = _FakeHTTP(_openrouter_body(), OPENROUTER_HEADERS)
         with (
-            patch.dict("os.environ", {}, clear=True),
+            override_resolver(UnconfiguredResolver()),
             patch("kerdoios.providers.http.urllib.request.urlopen", return_value=fake),
         ):
-            offers = or_discover(api_key=None)
+            offers = or_discover()
         free = next(o for o in offers if o.model == "meta/llama:free")
         self.assertEqual(free.economics.remaining_free_quota, 0.0)
 
     def test_groq_skips_without_key(self) -> None:
         fake = _FakeHTTP(_groq_body(), GROQ_HEADERS)
         with (
-            patch.dict("os.environ", {}, clear=True),
+            override_resolver(UnconfiguredResolver()),
+            patch.dict("os.environ", {"GROQ_API_KEY": "g-ignored"}, clear=False),
             patch("kerdoios.providers.http.urllib.request.urlopen", return_value=fake),
         ):
-            self.assertEqual(discover_groq(api_key=None), [])
+            self.assertEqual(discover_groq(), [])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import json
 import sys
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
+from .doctor import inspect
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -53,12 +54,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     inv_p = sub.add_parser("inventory", help="Show resource inventory")
-    inv_p.add_argument("--live", action="store_true", help="Also query live adapters (OpenRouter public, local, keyed Groq/Cerebras)")
+    inv_p.add_argument("--live", action="store_true", help="Also query live adapters (OpenRouter public, local, keyed Groq/Cerebras from vault)")
     inv_p.add_argument("--no-fixture", action="store_true", help="Omit the deterministic fixture catalog")
     inv_p.add_argument(
         "--free",
         action="store_true",
-        help="Keep free models as the initial list (OpenRouter public/snapshot, plus keyed Groq/Cerebras free-tier; implies live, omits fixture)",
+        help="Keep free models as the initial list (OpenRouter public/snapshot, plus keyed Groq/Cerebras free-tier from vault; implies live, omits fixture)",
     )
     inv_p.add_argument("--refresh", action="store_true", help="Bypass inventory cache and fetch live OpenRouter")
 
@@ -69,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         item.add_argument(
             "--free",
             action="store_true",
-            help="Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier; implies live, omits fixture)",
+            help="Keep free models as the initial list (OpenRouter public/snapshot plus keyed Groq/Cerebras free-tier from vault; implies live, omits fixture)",
         )
         item.add_argument("--observed", action="store_true", help="Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)")
         item.add_argument("--workers", type=int, default=8)
@@ -94,7 +95,13 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--cost", type=float, default=0.0)
     record_p.add_argument("--retried", action="store_true")
 
+    sub.add_parser("doctor", help="Fail closed unless Hermes Bitwarden is configured")
+
     ns = parser.parse_args(argv)
+    if ns.command == "doctor":
+        report = inspect()
+        print(json.dumps(report.to_dict(), indent=2))
+        return 0 if report.ok else 1
     if ns.command == "record":
         record(
             Observation(

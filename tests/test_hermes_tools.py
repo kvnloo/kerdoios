@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from kerdoios import EXPLAIN_SCHEMA, INVENTORY_SCHEMA, PLAN_SCHEMA, register
 from kerdoios.observed import Observation, load_observations
+from kerdoios.vault import FakeVaultResolver, override_resolver
 
 
 class _Ctx:
@@ -33,6 +34,11 @@ class PluginManifestTests(unittest.TestCase):
 
 
 class RegisterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.vault = override_resolver(FakeVaultResolver({"GROQ_API_KEY": "g-test"}))
+        self.vault.__enter__()
+        self.addCleanup(lambda: self.vault.__exit__(None, None, None))
+
     def test_register_exposes_record_and_existing_tools(self) -> None:
         ctx = _Ctx()
         register(ctx)

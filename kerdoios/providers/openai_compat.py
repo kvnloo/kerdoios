@@ -1,11 +1,11 @@
-"""Env-gated OpenAI-compatible catalogs (Groq, Cerebras). Return [] without a key."""
+"""Vault-gated OpenAI-compatible catalogs (Groq, Cerebras). Return [] without a key."""
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from ..vault import provider_secret
 from .base import ResourceProvider
 from .http import get_json_response, quota_from_headers
 
@@ -161,7 +161,7 @@ def _catalog(
 
 
 def discover_groq(*, api_key: str | None = None, free_only: bool = False) -> list[ResourceOffer]:
-    key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
+    key = api_key if api_key is not None else provider_secret("groq")
     return _catalog(
         provider="groq",
         url=GROQ_MODELS,
@@ -173,7 +173,7 @@ def discover_groq(*, api_key: str | None = None, free_only: bool = False) -> lis
 
 
 def discover_cerebras(*, api_key: str | None = None, free_only: bool = False) -> list[ResourceOffer]:
-    key = api_key if api_key is not None else os.environ.get("CEREBRAS_API_KEY")
+    key = api_key if api_key is not None else provider_secret("cerebras")
     return _catalog(
         provider="cerebras",
         url=CEREBRAS_MODELS,

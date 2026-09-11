@@ -2,7 +2,8 @@
 
 Free inventory is cached under KERDOIOS_CACHE (default ~/.cache/kerdoios)
 for six hours. --refresh skips a fresh cache. Snapshot is last resort.
-Keyed Groq/Cerebras free-tier overlays the OpenRouter seed when those keys exist.
+Keyed Groq/Cerebras free-tier overlays the OpenRouter seed when those vault
+secrets resolve. Missing vault is not a free overlay; env keys are ignored.
 """
 
 from __future__ import annotations

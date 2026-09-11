@@ -29,6 +29,7 @@ from kerdoios.providers.openai_compat import discover_cerebras, discover_groq
 from kerdoios.types import Economics, Mode, WorkRequirement
 from kerdoios.optimize import plan
 from kerdoios.providers.fixture import fixture_offers
+from kerdoios.vault import FakeVaultResolver, UnconfiguredResolver, override_resolver
 
 
 # Catalog-shaped mocks only. CI must not need live Groq/Cerebras keys.
@@ -187,12 +188,12 @@ class OpenRouterMapTests(unittest.TestCase):
             self.assertEqual(or_discover(api_key=None), [])
 
     def test_groq_skips_without_key(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(discover_groq(api_key=None), [])
+        with override_resolver(UnconfiguredResolver()), patch.dict("os.environ", {"GROQ_API_KEY": "g-ignored"}, clear=False):
+            self.assertEqual(discover_groq(), [])
 
     def test_cerebras_skips_without_key(self) -> None:
-        with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(discover_cerebras(api_key=None), [])
+        with override_resolver(UnconfiguredResolver()), patch.dict("os.environ", {"CEREBRAS_API_KEY": "c-ignored"}, clear=False):
+            self.assertEqual(discover_cerebras(), [])
 
     def test_openrouter_tools_follow_supported_parameters(self) -> None:
         payload = {
@@ -572,10 +573,15 @@ class KeyedFreeOverlayTests(unittest.TestCase):
         self.env.start()
         self.addCleanup(self.env.stop)
 
-    def _discover_free(self, **env: str):
-        merged = {"KERDOIOS_CACHE": self.tmp.name, **env}
+    def _discover_free(self, *, groq: bool = False, cerebras: bool = False):
+        secrets = {}
+        if groq:
+            secrets["GROQ_API_KEY"] = "g-test"
+        if cerebras:
+            secrets["CEREBRAS_API_KEY"] = "c-test"
         with (
-            patch.dict("os.environ", merged, clear=True),
+            override_resolver(FakeVaultResolver(secrets) if secrets else UnconfiguredResolver()),
+            patch.dict("os.environ", {"KERDOIOS_CACHE": self.tmp.name}, clear=False),
             patch("kerdoios.providers.openrouter.get_json_response", side_effect=_catalog_response),
             patch("kerdoios.providers.openai_compat.get_json_response", side_effect=_catalog_response),
             patch("kerdoios.inventory.local.discover", return_value=[]),
@@ -590,7 +596,7 @@ class KeyedFreeOverlayTests(unittest.TestCase):
         self.assertTrue(any(str(o.source).startswith("openrouter:") for o in rows))
 
     def test_keyed_free_tier_overlays_and_skips_paid_catalog_rows(self) -> None:
-        rows = self._discover_free(GROQ_API_KEY="g-test", CEREBRAS_API_KEY="c-test")
+        rows = self._discover_free(groq=True, cerebras=True)
         groq_models = {o.model for o in rows if o.provider == "groq"}
         cerebras_models = {o.model for o in rows if o.provider == "cerebras"}
         self.assertEqual(
@@ -605,6 +611,10 @@ class KeyedFreeOverlayTests(unittest.TestCase):
         self.assertTrue(keyed)
         self.assertTrue(all(o.economics.remaining_free_quota == 0 for o in keyed))
         self.assertFalse(any(o.economics.remaining_free_quota in {80_000.0, 50_000.0} for o in keyed))
+        cache = Path(self.tmp.name) / "inventory.json"
+        self.assertTrue(cache.is_file())
+        self.assertNotIn("g-test", cache.read_text())
+        self.assertNotIn("c-test", cache.read_text())
 
     def test_snapshot_still_used_when_openrouter_live_empty_but_keys_set(self) -> None:
         def _no_openrouter(url: str, api_key: str | None = None, **kwargs):
@@ -613,11 +623,8 @@ class KeyedFreeOverlayTests(unittest.TestCase):
             return _catalog_response(url, api_key=api_key, **kwargs)
 
         with (
-            patch.dict(
-                "os.environ",
-                {"GROQ_API_KEY": "g-test", "KERDOIOS_CACHE": self.tmp.name},
-                clear=True,
-            ),
+            override_resolver(FakeVaultResolver({"GROQ_API_KEY": "g-test"})),
+            patch.dict("os.environ", {"KERDOIOS_CACHE": self.tmp.name}, clear=False),
             patch("kerdoios.providers.openrouter.get_json_response", side_effect=_no_openrouter),
             patch("kerdoios.providers.openai_compat.get_json_response", side_effect=_no_openrouter),
             patch("kerdoios.inventory.local.discover", return_value=[]),
@@ -630,11 +637,8 @@ class KeyedFreeOverlayTests(unittest.TestCase):
 
     def test_live_keeps_non_free_keyed_rows(self) -> None:
         with (
-            patch.dict(
-                "os.environ",
-                {"GROQ_API_KEY": "g-test", "KERDOIOS_CACHE": self.tmp.name},
-                clear=True,
-            ),
+            override_resolver(FakeVaultResolver({"GROQ_API_KEY": "g-test"})),
+            patch.dict("os.environ", {"KERDOIOS_CACHE": self.tmp.name}, clear=False),
             patch("kerdoios.providers.openrouter.get_json_response", side_effect=_catalog_response),
             patch("kerdoios.providers.openai_compat.get_json_response", side_effect=_catalog_response),
             patch("kerdoios.inventory.local.discover", return_value=[]),
