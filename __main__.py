@@ -55,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     inv_p.add_argument("--live", action="store_true", help="Also query live adapters (OpenRouter public, local, keyed Groq/Cerebras)")
     inv_p.add_argument("--no-fixture", action="store_true", help="Omit the deterministic fixture catalog")
     inv_p.add_argument("--free", action="store_true", help="Keep free models as the initial list (implies live, omits fixture)")
+    inv_p.add_argument("--refresh", action="store_true", help="Bypass inventory cache and fetch live OpenRouter")
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     include_fixture = True
     live = False
     free_only = bool(getattr(ns, "free", False))
+    refresh = bool(getattr(ns, "refresh", False))
     if ns.command == "inventory":
         include_fixture = not ns.no_fixture
         live = ns.live
@@ -83,7 +85,12 @@ def main(argv: list[str] | None = None) -> int:
     if free_only:
         live = True
         include_fixture = False
-    offers = discover_all(include_fixture=include_fixture, live=live, free_only=free_only)
+    offers = discover_all(
+        include_fixture=include_fixture,
+        live=live,
+        free_only=free_only,
+        refresh=refresh,
+    )
     if ns.command == "inventory":
         print(json.dumps([_inventory_row(o) for o in offers], indent=2))
         return 0
