@@ -1,0 +1,134 @@
+# Provenance for files copied from kvnloo/verified-oss-loop.
+# source: kit = synced from the standard; local = developer-owned, never overwrite;
+#         modified = started as kit, local edits (re-run skips unless --force).
+# Re-run oss-onboard to receive new kit skills. Mark a path local with:
+#   python3 scripts/kit-inventory.py mark --root . --path skills/NAME/SKILL.md --source local
+schema: verified-oss-loop.inventory.v1
+kit: https://github.com/kvnloo/verified-oss-loop
+kit_revision: 9ce83bd302b542fdd1c413d7da733e86311bd202
+synced_at: 2026-09-11T17:30:13Z
+files:
+  - path: .github/CODEOWNERS
+    source: kit
+    sha256: 7f28300be223f17ddc8446d9f3885f6b49feaac4a79176f12e63d69b62770e34
+    kit_sha256: 7f28300be223f17ddc8446d9f3885f6b49feaac4a79176f12e63d69b62770e34
+  - path: .github/ISSUE_TEMPLATE/bug.yml
+    source: kit
+    sha256: c3be04fa057ed643073833d4b319dd45566b19fea5c47ed6c73038cd5de678b1
+    kit_sha256: c3be04fa057ed643073833d4b319dd45566b19fea5c47ed6c73038cd5de678b1
+  - path: .github/ISSUE_TEMPLATE/claim.yml
+    source: kit
+    sha256: 7f23ee391f54a05dda7649083a41bb10ac036ee0c2e28f3fb6a8ff788ad59899
+    kit_sha256: 7f23ee391f54a05dda7649083a41bb10ac036ee0c2e28f3fb6a8ff788ad59899
+  - path: .github/ISSUE_TEMPLATE/config.yml
+    source: kit
+    sha256: 1bd7d2f41a2ca2b88b9ce206441158f5d2ce0b316596f1ede2d214abd5517738
+    kit_sha256: 1bd7d2f41a2ca2b88b9ce206441158f5d2ce0b316596f1ede2d214abd5517738
+  - path: .github/ISSUE_TEMPLATE/feature.yml
+    source: kit
+    sha256: b54103aa4e35284f910619e5cb6ac22b100b6e2934091ef24a7f229b2534c3cd
+    kit_sha256: b54103aa4e35284f910619e5cb6ac22b100b6e2934091ef24a7f229b2534c3cd
+  - path: .github/PULL_REQUEST_TEMPLATE.md
+    source: modified
+    sha256: 60c2d5a8d9b0bb5e9b6eace1114d56b4ea9ad300e3774805eea313ce255853fc
+    kit_sha256: 4a96d66f53b3337e0017437a67f28e0339a8f8ba1455eff93d09bd2ed2fa0430
+  - path: .github/dependabot.yml
+    source: kit
+    sha256: c8c84c10f737cdb53d3bb3e155fb9eab1efb4180b621bf0a137765df42e78020
+    kit_sha256: c8c84c10f737cdb53d3bb3e155fb9eab1efb4180b621bf0a137765df42e78020
+  - path: .github/labeler.yml
+    source: kit
+    sha256: 9574879997ebba5aa369389f2bacc007ea22f870e5ff951a4d368514b5758d28
+    kit_sha256: 9574879997ebba5aa369389f2bacc007ea22f870e5ff951a4d368514b5758d28
+  - path: .github/labels.md
+    source: kit
+    sha256: 68e83de837689e97ab556978777cd1313a8e229d5bd78bc2894ca7d82b2d67bb
+    kit_sha256: 68e83de837689e97ab556978777cd1313a8e229d5bd78bc2894ca7d82b2d67bb
+  - path: .github/scripts/check-receipt.py
+    source: kit
+    sha256: 188313013ff82f355612534a99f51efce0f2c2c5a1566cb5a4b1863f4e4b0063
+    kit_sha256: 188313013ff82f355612534a99f51efce0f2c2c5a1566cb5a4b1863f4e4b0063
+  - path: .github/scripts/create-labels.sh
+    source: kit
+    sha256: 1401177c0d7093b6d9094da24c30f0f68f86ec2be32edaa86f5e0c7b331bab59
+    kit_sha256: 1401177c0d7093b6d9094da24c30f0f68f86ec2be32edaa86f5e0c7b331bab59
+  - path: .github/scripts/expire-claims.sh
+    source: kit
+    sha256: f7b19ea5ae7226368a3515db9dd292ab20844fb09618bebb7c92f8abc3d6132d
+    kit_sha256: f7b19ea5ae7226368a3515db9dd292ab20844fb09618bebb7c92f8abc3d6132d
+  - path: .github/workflows/claim-expiry.yml
+    source: kit
+    sha256: 23f4a98d0dff21e44251ae5804a00afd17d2c6214616f96083e6148347eff6b0
+    kit_sha256: 23f4a98d0dff21e44251ae5804a00afd17d2c6214616f96083e6148347eff6b0
+  - path: .github/workflows/labeler.yml
+    source: kit
+    sha256: 555c50172b8bc51d15fca6d896b4ed2d3420e01ae63af39013f95d7fcb99598b
+    kit_sha256: 555c50172b8bc51d15fca6d896b4ed2d3420e01ae63af39013f95d7fcb99598b
+  - path: .github/workflows/receipt.yml
+    source: kit
+    sha256: 3b06f0f0928b6149beb187de8588280c637d2ed9167c2d4ad2c3457feb0af91f
+    kit_sha256: 3b06f0f0928b6149beb187de8588280c637d2ed9167c2d4ad2c3457feb0af91f
+  - path: .github/workflows/scorecard.yml
+    source: kit
+    sha256: e10cb2709765431fd549796883d441eac5425f4be9cfe54dd97ce635f02d0b43
+    kit_sha256: e10cb2709765431fd549796883d441eac5425f4be9cfe54dd97ce635f02d0b43
+  - path: .github/workflows/stale.yml
+    source: kit
+    sha256: 1c8b97c73c6dc87a541201e185dfd352fa0f8f738d29ba5981017124a451e798
+    kit_sha256: 1c8b97c73c6dc87a541201e185dfd352fa0f8f738d29ba5981017124a451e798
+  - path: .verified-oss-loop/README.md
+    source: kit
+    sha256: 55c181eac1e6c50044b22dff84800a01aa8f9e3ecc5f9826e32a0e9612f25b5e
+    kit_sha256: 55c181eac1e6c50044b22dff84800a01aa8f9e3ecc5f9826e32a0e9612f25b5e
+  - path: .verified-oss-loop/kit-inventory.py
+    source: kit
+    sha256: b393a6f25c5f86ddf9bdcb2ec0cd3ba4d8edc544dbe0b4029a5c2fd48d235cf6
+    kit_sha256: b393a6f25c5f86ddf9bdcb2ec0cd3ba4d8edc544dbe0b4029a5c2fd48d235cf6
+  - path: AGENTS.md
+    source: modified
+    sha256: d2e61e3a519d3b5abb286790f0a119401e0e1646e9b8c9d7d7e5bd90ac9ca66a
+    kit_sha256: 11165a4fe4811a13d0e4cbc23e25ad2bba7b336fe95b39d9e844695b386ffa8c
+  - path: CONTRIBUTING.md
+    source: kit
+    sha256: d9225db08679345f1083cb379907812abeb49f5fd85d800d048c7fd79f6ea0ba
+    kit_sha256: d9225db08679345f1083cb379907812abeb49f5fd85d800d048c7fd79f6ea0ba
+  - path: SECURITY.md
+    source: kit
+    sha256: 3e7cb8117c023b4772f502f902c19a38921cc0901f4addf1b7a4c5c031fea04e
+    kit_sha256: 3e7cb8117c023b4772f502f902c19a38921cc0901f4addf1b7a4c5c031fea04e
+  - path: prompt.md
+    source: kit
+    sha256: d80d246db8734ef336d16b7f586e28915f9b30767528b659b32bb5cc7c18e825
+    kit_sha256: d80d246db8734ef336d16b7f586e28915f9b30767528b659b32bb5cc7c18e825
+  - path: roadmap.example.yml
+    source: kit
+    sha256: 221df8f58a65aac116426397ae3957288279923ae18e622861b1dfbe1ccb9c53
+    kit_sha256: 221df8f58a65aac116426397ae3957288279923ae18e622861b1dfbe1ccb9c53
+  - path: skills/anti-slop/SKILL.md
+    source: modified
+    sha256: e093aed532b64a800ec12e103acf79636b511022ffc1fa46a003bbee03986064
+    kit_sha256: 7151d5eea1dfd42f5cee0a37f0c03c5e151ab24a5d3f0fdaec94a65286facb76
+  - path: skills/autodevelop/SKILL.md
+    source: kit
+    sha256: 093934598b1bc8dfffbe69d825ee5be4e107a1740a5e44c89bd4557cf25922a2
+    kit_sha256: 093934598b1bc8dfffbe69d825ee5be4e107a1740a5e44c89bd4557cf25922a2
+  - path: skills/dr-eggbot/SKILL.md
+    source: kit
+    sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
+    kit_sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
+  - path: skills/orient/SKILL.md
+    source: kit
+    sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
+    kit_sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
+  - path: skills/pstack/SKILL.md
+    source: kit
+    sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
+    kit_sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
+  - path: skills/tdd/SKILL.md
+    source: modified
+    sha256: f27408378bb3aa802bcef5350ef0e0e6fb96c8f5129be6a8fcd946a0b608b940
+    kit_sha256: 31ed6f80001de1d27757cd84b464366a544320695c75d62d5fa0edc87963062b
+  - path: skills/verify/SKILL.md
+    source: modified
+    sha256: f577fd8104619f7ebbb2b535ee5185bc5f59a5dbdcca19e984ce657cd9d44834
+    kit_sha256: 41a045bd22ea9ce94114925fd80493fbe431489d0c5511f0b43588b1f5c42ca9
