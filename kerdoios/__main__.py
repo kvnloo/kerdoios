@@ -3,17 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT.parent))
-
-from kerdoios.explain import explain  # noqa: E402
-from kerdoios.inventory import discover_all  # noqa: E402
-from kerdoios.optimize import plan  # noqa: E402
-from kerdoios.providers.free import is_free  # noqa: E402
-from kerdoios.types import Mode, WorkRequirement  # noqa: E402
+from .explain import explain
+from .inventory import discover_all
+from .optimize import plan
+from .providers.free import is_free
+from .types import Mode, WorkRequirement
 
 
 def _req(ns: argparse.Namespace) -> WorkRequirement:

@@ -65,6 +65,12 @@ hermes plugins doctor ~/.hermes/plugins/kerdoios --ci
 hermes plugins enable kerdoios
 ```
 
+`plugin.yaml` stays at the plugin root so Hermes can load the directory. The importable package is `kerdoios/` (plus `pyproject.toml`), so a checkout does not need to be named `kerdoios` and plugin cwd does not shadow stdlib `types`. Optional editable install from any folder name:
+
+```bash
+pip install -e .
+```
+
 The critical-path seed is **public free models**. No API keys are required:
 
 ```bash
