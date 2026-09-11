@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -29,7 +30,7 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
     privacy: PrivacyClass = (
         privacy_raw if privacy_raw in ("public", "confidential", "local_only") else "public"
     )
-    return WorkRequirement(
+    flags = WorkRequirement(
         coding=float(args.get("coding") or 0.7),
         reasoning=float(args.get("reasoning") or 0.6),
         tool_use=bool(args.get("tools_required", True)),
@@ -43,6 +44,11 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
         mode=mode,
         tools=tuple(tools) if tools else ("github",),
     )
+    aodl = args.get("aodl")
+    if aodl is None or aodl == "":
+        return flags
+    doc = load_aodl(aodl) if isinstance(aodl, str) else aodl
+    return work_requirement_from_aodl(doc, defaults=flags)
 
 
 def _inventory_row(offer: Any) -> dict[str, Any]:
@@ -87,6 +93,7 @@ PLAN_SCHEMA = {
                 "type": "boolean",
                 "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
             },
+            "aodl": {"description": "AODL-shaped work spec object or JSON path"},
         },
     },
 }
@@ -106,6 +113,7 @@ EXPLAIN_SCHEMA = {
                 "type": "boolean",
                 "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
             },
+            "aodl": {"description": "AODL-shaped work spec object or JSON path"},
         },
     },
 }
@@ -162,14 +170,20 @@ def register(ctx: Any) -> None:
         )
 
     def handle_plan(args: dict[str, Any], **kwargs: Any) -> str:
-        requirement = _req_from_args(args)
+        try:
+            requirement = _req_from_args(args)
+        except AodlIngestError as exc:
+            return f"aodl: {exc}"
         return json.dumps(
             plan(_offers(args), requirement, use_observed=bool(args.get("observed"))).to_dict(),
             indent=2,
         )
 
     def handle_explain(args: dict[str, Any], **kwargs: Any) -> str:
-        requirement = _req_from_args(args)
+        try:
+            requirement = _req_from_args(args)
+        except AodlIngestError as exc:
+            return f"aodl: {exc}"
         return explain(_offers(args), requirement, use_observed=bool(args.get("observed")))
 
     def handle_inventory(args: dict[str, Any], **kwargs: Any) -> str:
@@ -221,6 +235,7 @@ def register(ctx: Any) -> None:
         live = bool(getattr(ns, "live", False))
         free = bool(getattr(ns, "free", False))
         refresh = bool(getattr(ns, "refresh", False))
+        aodl = getattr(ns, "aodl", None)
         args = {
             "workers": workers,
             "budget": budget,
@@ -230,6 +245,7 @@ def register(ctx: Any) -> None:
             "free": free,
             "refresh": refresh,
             "observed": bool(getattr(ns, "observed", False)),
+            "aodl": aodl,
         }
         if command == "inventory":
             print(handle_inventory(args))
@@ -253,6 +269,7 @@ def register(ctx: Any) -> None:
                 p.add_argument("--mode", default="balanced")
                 p.add_argument("--privacy", default="public")
                 p.add_argument("--observed", action="store_true")
+                p.add_argument("--aodl", default=None)
         record_p = subs.add_parser("record")
         record_p.add_argument("--provider", required=True)
         record_p.add_argument("--model", required=True)

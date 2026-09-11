@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
+from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -12,7 +14,7 @@ from .types import Mode, WorkRequirement
 
 
 def _req(ns: argparse.Namespace) -> WorkRequirement:
-    return WorkRequirement(
+    flags = WorkRequirement(
         coding=ns.coding,
         reasoning=ns.reasoning,
         tool_use=not ns.no_tools,
@@ -23,6 +25,10 @@ def _req(ns: argparse.Namespace) -> WorkRequirement:
         mode=Mode(ns.mode),
         tools=("github",) if not ns.no_tools else (),
     )
+    path = getattr(ns, "aodl", None)
+    if not path:
+        return flags
+    return work_requirement_from_aodl(load_aodl(path), defaults=flags)
 
 
 def _inventory_row(offer) -> dict:
@@ -74,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
         item.add_argument("--coding", type=float, default=0.7)
         item.add_argument("--reasoning", type=float, default=0.6)
         item.add_argument("--no-tools", action="store_true")
+        item.add_argument(
+            "--aodl",
+            default=None,
+            help="AODL-shaped work spec JSON path (or - for stdin)",
+        )
 
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
@@ -96,6 +107,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    requirement = None
+    if ns.command != "inventory":
+        try:
+            requirement = _req(ns)
+        except AodlIngestError as exc:
+            print(f"aodl: {exc}", file=sys.stderr)
+            return 2
     include_fixture = True
     live = False
     free_only = bool(getattr(ns, "free", False))
@@ -117,7 +135,6 @@ def main(argv: list[str] | None = None) -> int:
     if ns.command == "inventory":
         print(json.dumps([_inventory_row(o) for o in offers], indent=2))
         return 0
-    requirement = _req(ns)
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":
         print(explain(offers, requirement, built))
