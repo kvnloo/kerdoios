@@ -101,13 +101,14 @@ INVENTORY_SCHEMA = {
     "name": "kerdoios_inventory",
     "description": (
         "List ResourceOffers. free=true seeds from public free models "
-        "(OpenRouter /models, then the vendored snapshot if the network is empty)."
+        "(cache, then OpenRouter /models, then the vendored snapshot if cache and network are empty)."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "live": {"type": "boolean", "description": "Query live provider adapters in addition to the fixture catalog"},
             "free": {"type": "boolean", "description": "Keep free models as the initial list (no fixture mix)"},
+            "refresh": {"type": "boolean", "description": "Bypass inventory cache and fetch live OpenRouter"},
         },
     },
 }
@@ -117,11 +118,17 @@ def register(ctx: Any) -> None:
     def _offers(args: dict[str, Any]):
         live = bool(args.get("live"))
         free_only = bool(args.get("free"))
+        refresh = bool(args.get("refresh"))
         include_fixture = True
         if free_only:
             live = True
             include_fixture = False
-        return discover_all(include_fixture=include_fixture, live=live, free_only=free_only)
+        return discover_all(
+            include_fixture=include_fixture,
+            live=live,
+            free_only=free_only,
+            refresh=refresh,
+        )
 
     def handle_plan(args: dict[str, Any], **kwargs: Any) -> str:
         requirement = _req_from_args(args)
@@ -146,7 +153,16 @@ def register(ctx: Any) -> None:
         privacy = str(getattr(ns, "privacy", "public") or "public")
         live = bool(getattr(ns, "live", False))
         free = bool(getattr(ns, "free", False))
-        args = {"workers": workers, "budget": budget, "mode": mode, "privacy": privacy, "live": live, "free": free}
+        refresh = bool(getattr(ns, "refresh", False))
+        args = {
+            "workers": workers,
+            "budget": budget,
+            "mode": mode,
+            "privacy": privacy,
+            "live": live,
+            "free": free,
+            "refresh": refresh,
+        }
         if command == "inventory":
             print(handle_inventory(args))
             return
@@ -161,6 +177,8 @@ def register(ctx: Any) -> None:
             p = subs.add_parser(name)
             p.add_argument("--live", action="store_true")
             p.add_argument("--free", action="store_true")
+            if name == "inventory":
+                p.add_argument("--refresh", action="store_true")
             if name != "inventory":
                 p.add_argument("--workers", type=int, default=8)
                 p.add_argument("--budget", type=float, default=None)
