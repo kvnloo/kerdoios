@@ -125,7 +125,7 @@ Out of MVP: VM provisioning, GPU marketplaces, account creation, promotion scrap
 
 ## Contribute
 
-[CONTRIBUTING.md](CONTRIBUTING.md). Workers open PRs. They never merge `main`.
+[CONTRIBUTING.md](CONTRIBUTING.md). Forked this in a harness? [skills/contribute/SKILL.md](skills/contribute/SKILL.md). Workers open PRs. They never merge `main`.
 
 ## License
 
