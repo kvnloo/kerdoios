@@ -4,9 +4,13 @@ You are a contributor, not a maintainer. Workers open PRs. They never merge `mai
 
 This project follows the [Verified OSS Loop](https://github.com/kvnloo/verified-oss-loop). Issues are not claims. AI work is untrusted until proven.
 
+## Fork (harness)
+
+If you opened a **fork or clone** in Cursor, Codex, Claude Code, or Hermes: `skills/contribute/SKILL.md` is the on-ramp. Run `python3 -m unittest discover -s tests`, pick one leftover that is not an open PR, open a PR. **Never merge `main`.**
+
 ## First 60 seconds
 
-1. Read this file, then `CONTRIBUTING.md`.
+1. Read this file, then `CONTRIBUTING.md`. Forkers: `skills/contribute/SKILL.md` first.
 2. `git fetch origin` and branch from `origin/main` unless the issue names another base.
 3. Search open issues and PRs. Do not duplicate in-flight work.
 4. Orient (`skills/orient/SKILL.md`). If GitNexus MCP is already there: `query` → `context` → `impact`. Do not run `gitnexus analyze` unless a human asked. Else Serena symbols, else `rg` + read.

@@ -8,7 +8,7 @@ Paste **this entire file** as the first message to any coding agent (Cursor, Cod
 | Clone | `git clone https://github.com/kvnloo/kerdoios.git` |
 | Protocol | [Verified OSS Loop](https://github.com/kvnloo/verified-oss-loop) (`SPEC.md` in that kit; this tree has `AGENTS.md`) |
 
-You are a contributor, not a maintainer. Donate **one** coding pass. **Never merge `main`.**
+You are a contributor, not a maintainer. Donate **one** coding pass. **Never merge `main`.** Forked this tree in a harness? Start at `skills/contribute/SKILL.md`.
 
 ## Do
 
