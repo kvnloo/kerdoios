@@ -5,9 +5,11 @@ Hermes orchestrates. This plugin only plans placement.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
+from .bind import apply_targets
 from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
@@ -152,6 +154,33 @@ RECORD_SCHEMA = {
     },
 }
 
+APPLY_SCHEMA = {
+    "name": "kerdoios_apply",
+    "description": (
+        "Write an ExecutionPlan onto Hermes fallback_providers and/or an OMP modelRoles overlay. "
+        "Does not call models."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "workers": {"type": "integer", "minimum": 1},
+            "budget": {"type": "number"},
+            "mode": {
+                "type": "string",
+                "enum": ["free", "cheap", "balanced", "fast", "max", "scale", "private"],
+            },
+            "context": {"type": "integer"},
+            "privacy": {"type": "string", "enum": ["public", "confidential", "local_only"]},
+            "live": {"type": "boolean"},
+            "free": {"type": "boolean"},
+            "observed": {"type": "boolean"},
+            "aodl": {"description": "AODL-shaped work spec object or JSON path"},
+            "hermes_config": {"type": "string", "description": "Hermes config.yaml path"},
+            "omp_config": {"type": "string", "description": "OMP overlay YAML path"},
+        },
+    },
+}
+
 
 def register(ctx: Any) -> None:
     def _offers(args: dict[str, Any]):
@@ -207,10 +236,30 @@ def register(ctx: Any) -> None:
         record(observation)
         return json.dumps(observation.to_dict(), indent=2)
 
+    def handle_apply(args: dict[str, Any], **kwargs: Any) -> str:
+        try:
+            requirement = _req_from_args(args)
+        except AodlIngestError as exc:
+            return f"aodl: {exc}"
+        hermes_raw = str(args.get("hermes_config") or "").strip()
+        omp_raw = str(args.get("omp_config") or "").strip()
+        offers = _offers(args)
+        try:
+            result = apply_targets(
+                plan(offers, requirement, use_observed=bool(args.get("observed"))),
+                offers,
+                hermes_config=Path(hermes_raw) if hermes_raw else None,
+                omp_config=Path(omp_raw) if omp_raw else None,
+            )
+        except ValueError as exc:
+            return str(exc)
+        return json.dumps(result, indent=2)
+
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
     ctx.register_tool(name="kerdoios_inventory", toolset="kerdoios", schema=INVENTORY_SCHEMA, handler=handle_inventory)
     ctx.register_tool(name="kerdoios_record", toolset="kerdoios", schema=RECORD_SCHEMA, handler=handle_record)
+    ctx.register_tool(name="kerdoios_apply", toolset="kerdoios", schema=APPLY_SCHEMA, handler=handle_apply)
 
     def _cli(ns: Any) -> None:
         command = getattr(ns, "kerdoios_command", None) or getattr(ns, "command", None)
@@ -246,6 +295,8 @@ def register(ctx: Any) -> None:
             "refresh": refresh,
             "observed": bool(getattr(ns, "observed", False)),
             "aodl": aodl,
+            "hermes_config": getattr(ns, "hermes_config", None),
+            "omp_config": getattr(ns, "omp_config", None),
         }
         if command == "inventory":
             print(handle_inventory(args))
@@ -253,11 +304,14 @@ def register(ctx: Any) -> None:
         if command == "explain":
             print(handle_explain(args))
             return
+        if command == "apply":
+            print(handle_apply(args))
+            return
         print(handle_plan(args))
 
     def _setup(subparser: Any) -> None:
         subs = subparser.add_subparsers(dest="kerdoios_command")
-        for name in ("inventory", "plan", "explain"):
+        for name in ("inventory", "plan", "explain", "apply"):
             p = subs.add_parser(name)
             p.add_argument("--live", action="store_true")
             p.add_argument("--free", action="store_true")
@@ -270,6 +324,9 @@ def register(ctx: Any) -> None:
                 p.add_argument("--privacy", default="public")
                 p.add_argument("--observed", action="store_true")
                 p.add_argument("--aodl", default=None)
+            if name == "apply":
+                p.add_argument("--hermes-config", default=None)
+                p.add_argument("--omp-config", default=None)
         record_p = subs.add_parser("record")
         record_p.add_argument("--provider", required=True)
         record_p.add_argument("--model", required=True)
