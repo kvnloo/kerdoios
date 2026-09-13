@@ -1,3 +1,8 @@
+---
+name: orient
+description: Use before the first edit on any claim: find the existing shape of the code (query, context, impact) instead of rewriting from scratch.
+---
+
 # Orient
 
 Find the existing shape before you edit. Do not rewrite from a generated wiki.

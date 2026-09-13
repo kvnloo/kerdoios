@@ -1,3 +1,8 @@
+---
+name: anti-slop
+description: Use when writing or editing code in this repo: keep the smallest complete change, match the tree's style, and cut AI tells.
+---
+
 # Anti-slop
 
 The smallest complete change that matches this tree. Style of the files you touch wins over a generic “clean code” essay.
