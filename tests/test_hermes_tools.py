@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from kerdoios import EXPLAIN_SCHEMA, INVENTORY_SCHEMA, PLAN_SCHEMA, register
+from kerdoios import APPLY_SCHEMA, EXPLAIN_SCHEMA, INVENTORY_SCHEMA, PLAN_SCHEMA, register
 from kerdoios.observed import Observation, load_observations
 
 
@@ -30,6 +30,7 @@ class PluginManifestTests(unittest.TestCase):
         self.assertIn("- kerdoios_plan", text)
         self.assertIn("- kerdoios_explain", text)
         self.assertIn("- kerdoios_inventory", text)
+        self.assertIn("- kerdoios_apply", text)
 
 
 class RegisterTests(unittest.TestCase):
@@ -38,7 +39,7 @@ class RegisterTests(unittest.TestCase):
         register(ctx)
         self.assertEqual(
             set(ctx.tools),
-            {"kerdoios_plan", "kerdoios_explain", "kerdoios_inventory", "kerdoios_record"},
+            {"kerdoios_plan", "kerdoios_explain", "kerdoios_inventory", "kerdoios_record", "kerdoios_apply"},
         )
         self.assertEqual(ctx.tools["kerdoios_record"]["toolset"], "kerdoios")
         self.assertEqual(ctx.tools["kerdoios_record"]["schema"]["name"], "kerdoios_record")

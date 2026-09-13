@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .allocation_request import AllocationRequestError, load_allocation_request, work_requirement_from_allocation_request
+from .bind import apply_targets
 from .explain import explain
 from .inventory import discover_all
 from .observed import (
@@ -89,7 +90,8 @@ def main(argv: list[str] | None = None) -> int:
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
-    for item in (plan_p, explain_p):
+    apply_p = sub.add_parser("apply", help="Write the plan onto Hermes and/or OMP config (does not call models)")
+    for item in (plan_p, explain_p, apply_p):
         item.add_argument("--live", action="store_true")
         item.add_argument(
             "--free",
@@ -122,6 +124,8 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="z0int.allocation_request.v1 JSON path (or - for stdin)",
         )
+    apply_p.add_argument("--hermes-config", default=None, help="Hermes config.yaml to receive fallback_providers")
+    apply_p.add_argument("--omp-config", default=None, help="OMP overlay YAML to receive modelRoles")
 
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
@@ -273,6 +277,21 @@ def main(argv: list[str] | None = None) -> int:
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":
         print(explain(offers, requirement, built))
+        return 0
+    if ns.command == "apply":
+        hermes_config = getattr(ns, "hermes_config", None)
+        omp_config = getattr(ns, "omp_config", None)
+        try:
+            result = apply_targets(
+                built,
+                offers,
+                hermes_config=Path(hermes_config) if hermes_config else None,
+                omp_config=Path(omp_config) if omp_config else None,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(result, indent=2))
         return 0
     print(json.dumps(built.to_dict(), indent=2))
     return 0
