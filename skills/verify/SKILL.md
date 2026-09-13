@@ -1,3 +1,8 @@
+---
+name: verify
+description: Use after implementing a claim: verify with unit tests, red/green evidence receipt, and the runtime check; fail closed on what you did not run.
+---
+
 # Verify
 
 Tests are necessary, not sufficient. Generation and verification are separate.
