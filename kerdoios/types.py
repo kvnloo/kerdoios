@@ -126,9 +126,33 @@ class Placement:
     workers: int
     estimated_cost: float
     reasons: list[str] = field(default_factory=list)
+    # Ordered substitutes from the Pareto set, for automatic failover.
+    # Each entry is {"provider": ..., "model": ...} — self-contained so a
+    # runner needs no catalog lookup to switch models mid-batch.
+    fallbacks: list[dict[str, str]] = field(default_factory=list)
+    # Healing behavior the runner applies per task; see DEFAULT_RETRY_POLICY.
+    retry_policy: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+# Failure taxonomy for observed outcomes and the healing loop. Reasons in
+# RETRYABLE_REASONS are transient: the runner retries with backoff before
+# failing over. worker_crash/unknown fail over immediately — a crashing
+# worker is usually deterministic, and retrying it burns quota for nothing.
+FailureReason = Literal[
+    "rate_limited", "timeout", "upstream_5xx", "empty_response",
+    "worker_crash", "unknown",
+]
+RETRYABLE_REASONS: tuple[str, ...] = ("rate_limited", "timeout", "upstream_5xx", "empty_response")
+
+DEFAULT_RETRY_POLICY: dict[str, Any] = {
+    "max_retries": 3,
+    "backoff_s": 10.0,
+    "attempt_timeout_s": 300.0,
+    "retry_on": list(RETRYABLE_REASONS),
+}
 
 
 @dataclass

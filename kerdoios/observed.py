@@ -23,8 +23,9 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_LOG_PATH = Path(
@@ -37,12 +38,20 @@ DEFAULT_LOG_PATH = Path(
 # overwrite a fixture or provider_claim capability score.
 MIN_OBSERVATIONS = 5
 
+# Recency half-life for observed outcomes. A model that 429'd an hour ago
+# is penalized; a model that 429'd last month is forgiven. Trust is
+# measured on decayed weight, so stale failures fall below the floor on
+# their own instead of blacklisting a model forever.
+HALF_LIFE_S = 86400.0
+
 
 @dataclass(frozen=True)
 class Observation:
     """One placement outcome. `task_type` is a free-text bucket the caller
     controls (e.g. "coding", "reasoning", "tool_use") — kerdoios does not
     prescribe a taxonomy, matching the WorkRequirement fields it already has.
+    `reason` is the failure taxonomy (None on success); `recorded_at` is a
+    unix timestamp so old failures decay instead of blacklisting a model.
     """
 
     provider: str
@@ -51,6 +60,8 @@ class Observation:
     completed: bool
     actual_cost: float
     retried: bool = False
+    reason: str | None = None
+    recorded_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
         return {
@@ -60,6 +71,8 @@ class Observation:
             "completed": self.completed,
             "actual_cost": self.actual_cost,
             "retried": self.retried,
+            "reason": self.reason,
+            "recorded_at": self.recorded_at,
         }
 
 
@@ -80,10 +93,15 @@ class OutcomeStats:
     completion_rate: float
     mean_cost: float
     retry_rate: float
+    # Time-decayed views. effective_n is the recency-weighted observation
+    # count; decayed_completion_rate weights recent outcomes more. Trust
+    # is measured on effective_n so stale failures forgive themselves.
+    effective_n: float = 0.0
+    decayed_completion_rate: float = 0.0
 
     @property
     def trusted(self) -> bool:
-        return self.n >= MIN_OBSERVATIONS
+        return self.effective_n >= MIN_OBSERVATIONS
 
 
 def load_observations(*, path: Path | None = None) -> list[Observation]:
@@ -110,6 +128,8 @@ def load_observations(*, path: Path | None = None) -> list[Observation]:
                         completed=bool(payload["completed"]),
                         actual_cost=float(payload["actual_cost"]),
                         retried=bool(payload.get("retried", False)),
+                        reason=payload.get("reason"),
+                        recorded_at=float(payload.get("recorded_at", time.time())),
                     )
                 )
             except (KeyError, TypeError, ValueError):
@@ -117,7 +137,12 @@ def load_observations(*, path: Path | None = None) -> list[Observation]:
     return rows
 
 
-def aggregate(observations: list[Observation]) -> dict[tuple[str, str], OutcomeStats]:
+def _recency_weight(recorded_at: float, now: float) -> float:
+    age = max(0.0, now - recorded_at)
+    return 0.5 ** (age / HALF_LIFE_S)
+
+
+def aggregate(observations: list[Observation], *, now: float | None = None) -> dict[tuple[str, str], OutcomeStats]:
     """Aggregate by (provider, model) across all task types.
 
     Task-type-level stats are a natural follow-up (the AgentWeb benchmark
@@ -125,14 +150,27 @@ def aggregate(observations: list[Observation]) -> dict[tuple[str, str], OutcomeS
     project generates on day one; provider+model is the floor that makes
     the MIN_OBSERVATIONS shrinkage meaningful without waiting for a
     task-type taxonomy to stabilize.
+
+    `now` defaults to the newest observation so a freshly written batch
+    gets full weight; pass time.time() in production to decay history.
     """
     buckets: dict[tuple[str, str], list[Observation]] = defaultdict(list)
     for obs in observations:
         buckets[(obs.provider, obs.model)].append(obs)
+    if now is None:
+        now = max((o.recorded_at for o in observations), default=time.time())
     stats: dict[tuple[str, str], OutcomeStats] = {}
     for key, rows in buckets.items():
         n = len(rows)
         completed = sum(1 for r in rows if r.completed)
+        weights = [_recency_weight(r.recorded_at, now) for r in rows]
+        # Round away float dust: 5 fresh observations must weigh exactly 5.
+        total_w = round(sum(weights), 9)
+        decayed_rate = (
+            sum(w for w, r in zip(weights, rows) if r.completed) / total_w
+            if total_w > 0
+            else 0.0
+        )
         stats[key] = OutcomeStats(
             provider=key[0],
             model=key[1],
@@ -140,5 +178,7 @@ def aggregate(observations: list[Observation]) -> dict[tuple[str, str], OutcomeS
             completion_rate=completed / n,
             mean_cost=sum(r.actual_cost for r in rows) / n,
             retry_rate=sum(1 for r in rows if r.retried) / n,
+            effective_n=total_w,
+            decayed_completion_rate=decayed_rate,
         )
     return stats

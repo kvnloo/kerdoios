@@ -49,13 +49,15 @@ def blend_offer(offer: ResourceOffer, stats: OutcomeStats) -> ResourceOffer:
     if weight <= 0.0:
         return offer
 
-    completion_rate = max(stats.completion_rate, 1e-6)
+    completion_rate = max(stats.decayed_completion_rate, 1e-6)
     cap = offer.capabilities
-    # Observed completion rate becomes a proxy for real-world capability
-    # fit: a model that claims 0.9 coding but only completes 40% of tasks
-    # is not actually a 0.9. Blend the claimed score down toward the
-    # observed completion rate rather than replacing it outright, since
-    # completion rate conflates capability with prompt/task mismatch.
+    # The decayed observed completion rate becomes a proxy for real-world
+    # capability fit: a model that claims 0.9 coding but only completes 40%
+    # of tasks is not actually a 0.9. Decayed, not raw, so a model that
+    # 429'd last month is not permanently dragged down by it. Blend the
+    # claimed score toward the observed rate rather than replacing it
+    # outright, since completion rate conflates capability with
+    # prompt/task mismatch.
     blended_cap = replace(
         cap,
         reasoning=cap.reasoning * (1 - weight) + completion_rate * weight,

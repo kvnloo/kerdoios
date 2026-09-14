@@ -93,6 +93,32 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--completed", action="store_true")
     record_p.add_argument("--cost", type=float, default=0.0)
     record_p.add_argument("--retried", action="store_true")
+    record_p.add_argument(
+        "--reason",
+        default=None,
+        choices=["rate_limited", "timeout", "upstream_5xx", "empty_response", "worker_crash", "unknown"],
+        help="Failure taxonomy; omit on success",
+    )
+
+    run_p = sub.add_parser(
+        "run",
+        help="Run a plan's tasks with self-healing retries and fallback failover",
+    )
+    run_p.add_argument("--plan", required=True, help="ExecutionPlan JSON file (from `kerdoios plan`)")
+    run_p.add_argument("--tasks", required=True, help="JSONL file, one task object per line")
+    run_p.add_argument(
+        "--worker-cmd",
+        required=True,
+        help="Worker command template; {model}, {provider}, {task_id} are substituted, "
+        "task JSON goes on stdin. See kerdoios/heal.py for the worker contract.",
+    )
+    run_p.add_argument("--jobs", type=int, default=None, help="Thread-pool size (default: min(32, tasks))")
+    run_p.add_argument("--out", default=None, help="Write result JSONL here (default: stdout)")
+    run_p.add_argument("--task-type", default="unknown")
+    run_p.add_argument("--max-retries", type=int, default=None)
+    run_p.add_argument("--backoff-s", type=float, default=None)
+    run_p.add_argument("--timeout", type=float, default=None, help="Per-attempt seconds")
+    run_p.add_argument("--observed-log", default=None)
 
     ns = parser.parse_args(argv)
     if ns.command == "record":
@@ -104,8 +130,39 @@ def main(argv: list[str] | None = None) -> int:
                 completed=ns.completed,
                 actual_cost=ns.cost,
                 retried=ns.retried,
+                reason=ns.reason,
             )
         )
+        return 0
+    if ns.command == "run":
+        from .heal import run_batch
+
+        with open(ns.plan, encoding="utf-8") as fh:
+            plan_doc = json.load(fh)
+        tasks = []
+        with open(ns.tasks, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    tasks.append(json.loads(line))
+        if not tasks:
+            print("run: no tasks in --tasks file", file=sys.stderr)
+            return 2
+        results = run_batch(
+            plan_doc,
+            tasks,
+            ns.worker_cmd,
+            jobs=ns.jobs,
+            task_type=ns.task_type,
+            observed_log=ns.observed_log,
+            max_retries=ns.max_retries,
+            backoff_s=ns.backoff_s,
+            attempt_timeout_s=ns.timeout,
+            out=ns.out,
+        )
+        if not ns.out:
+            for result in results:
+                print(json.dumps(result))
         return 0
     requirement = None
     if ns.command != "inventory":

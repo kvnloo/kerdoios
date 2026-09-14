@@ -5,6 +5,7 @@ from .pareto import nondominated
 from .presets import PRESETS
 from .score import ScoredOffer, capability_fit, score
 from .types import (
+    DEFAULT_RETRY_POLICY,
     ExecutionPlan,
     Mode,
     Placement,
@@ -108,6 +109,15 @@ def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: boo
             minimize=[True, False, True, True],
         )
     placements, unplaced = allocate(scored, req)
+    ranked_ids = [item.offer.id for item in sorted(scored, key=lambda s: s.fitness, reverse=True)]
+    by_id = {item.offer.id: item.offer for item in scored}
+    for placement in placements:
+        placement.retry_policy = dict(DEFAULT_RETRY_POLICY)
+        placement.fallbacks = [
+            {"provider": by_id[fid].provider, "model": by_id[fid].model}
+            for fid in ranked_ids
+            if fid != placement.offer_id and by_id[fid].model
+        ][:3]
     total_cost = sum(item.estimated_cost for item in placements)
     if not placements:
         duration = 0.0

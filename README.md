@@ -97,6 +97,23 @@ hermes kerdoios plan
 hermes kerdoios explain
 ```
 
+`run` executes a plan through your own worker command with self-healing —
+per-task isolation, retry with backoff, and failover through each
+placement's fallback chain. Kerdoios never calls a model API itself; the
+worker does, and reports the outcome on the worker contract
+(see `kerdoios/heal.py`):
+
+```bash
+python3 -m kerdoios plan --workers 8 --mode cheap > plan.json
+python3 -m kerdoios run --plan plan.json --tasks tasks.jsonl \
+  --worker-cmd "python3 my_worker.py --model {model}"
+```
+
+Every attempt is auto-recorded with a failure reason
+(`rate_limited|timeout|upstream_5xx|empty_response|worker_crash`), so the
+next `--observed` plan routes around sick models — recent failures are
+penalized, old ones decay away instead of blacklisting a model forever.
+
 ## Architecture
 
 ```text
