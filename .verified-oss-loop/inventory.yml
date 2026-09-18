@@ -80,25 +80,29 @@ files:
     source: kit
     sha256: 55c181eac1e6c50044b22dff84800a01aa8f9e3ecc5f9826e32a0e9612f25b5e
     kit_sha256: 55c181eac1e6c50044b22dff84800a01aa8f9e3ecc5f9826e32a0e9612f25b5e
+  - path: .verified-oss-loop/config.yml
+    source: local
+    sha256: 3ff3ebe97be58d5e67be9ed4365a14689a0aabb4bd4969afb397479a8415c377
+    kit_sha256: ""
   - path: .verified-oss-loop/kit-inventory.py
     source: kit
     sha256: b393a6f25c5f86ddf9bdcb2ec0cd3ba4d8edc544dbe0b4029a5c2fd48d235cf6
     kit_sha256: b393a6f25c5f86ddf9bdcb2ec0cd3ba4d8edc544dbe0b4029a5c2fd48d235cf6
   - path: AGENTS.md
     source: modified
-    sha256: d2e61e3a519d3b5abb286790f0a119401e0e1646e9b8c9d7d7e5bd90ac9ca66a
+    sha256: 76c14e459c1169da2f673dcf9306abbdc4680bd5c0fa7898b61c28874edba379
     kit_sha256: 11165a4fe4811a13d0e4cbc23e25ad2bba7b336fe95b39d9e844695b386ffa8c
   - path: CONTRIBUTING.md
-    source: kit
-    sha256: d9225db08679345f1083cb379907812abeb49f5fd85d800d048c7fd79f6ea0ba
+    source: modified
+    sha256: 528f9da5740e19288d6655fc9d773a58d72a3bd21f3c930628d01f9a813a4719
     kit_sha256: d9225db08679345f1083cb379907812abeb49f5fd85d800d048c7fd79f6ea0ba
   - path: SECURITY.md
     source: kit
     sha256: 3e7cb8117c023b4772f502f902c19a38921cc0901f4addf1b7a4c5c031fea04e
     kit_sha256: 3e7cb8117c023b4772f502f902c19a38921cc0901f4addf1b7a4c5c031fea04e
   - path: prompt.md
-    source: kit
-    sha256: d80d246db8734ef336d16b7f586e28915f9b30767528b659b32bb5cc7c18e825
+    source: modified
+    sha256: 7b40706b911aa5b8c79a7a621b18c3296b3fd7187efa6d7a9442f4e048c25138
     kit_sha256: d80d246db8734ef336d16b7f586e28915f9b30767528b659b32bb5cc7c18e825
   - path: roadmap.example.yml
     source: kit
@@ -112,6 +116,9 @@ files:
     source: kit
     sha256: 093934598b1bc8dfffbe69d825ee5be4e107a1740a5e44c89bd4557cf25922a2
     kit_sha256: 093934598b1bc8dfffbe69d825ee5be4e107a1740a5e44c89bd4557cf25922a2
+  - path: skills/contribute/SKILL.md
+    source: local
+    sha256: 997dc1c5dbcabd611b94ed487352b6ffab6826e6aa8402576aac3c23f68ed8ce
   - path: skills/dr-eggbot/SKILL.md
     source: kit
     sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5

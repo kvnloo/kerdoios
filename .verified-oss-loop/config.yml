@@ -1,0 +1,13 @@
+schema: verified-oss-loop.config.v1
+kit: https://github.com/kvnloo/verified-oss-loop
+kit_revision: 9ce83bd302b542fdd1c413d7da733e86311bd202
+unit: python3 -m unittest discover -s tests
+mutation: n/a
+runtime:
+  - python3 -m kerdoios plan --workers 8 --mode cheap
+  - python3 -m kerdoios inventory --free
+never_merge:
+  - main
+dispatcher: false
+gateway_chat_completions: false
+litellm_zero_is_free: false
