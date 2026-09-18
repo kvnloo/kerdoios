@@ -129,4 +129,30 @@ def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: boo
         rejections=rejections,
         mode=req.mode.value,
         unplaced_workers=unplaced,
+        retry_policy=req.retry_policy or {"max_retries": 0, "on_failure": "fallback"},
+        quota_reservations=_quota_reservations(req, placements),
+        join_policy=req.join_policy or "all",
     )
+
+
+def _quota_reservations(req, placements) -> list[dict]:
+    """Reserve shared quota groups once across MoA placements (planner metadata)."""
+    out = []
+    seen_groups: set[str] = set()
+    for q in getattr(req, "quotas", ()) or ():
+        group = q.group or q.name
+        if group in seen_groups:
+            continue
+        seen_groups.add(group)
+        out.append(
+            {
+                "name": q.name,
+                "group": group,
+                "unit": q.unit,
+                "limit": q.limit,
+                "remaining": q.remaining,
+                "placements": [p.offer_id for p in placements],
+                "shared": bool(q.group),
+            }
+        )
+    return out

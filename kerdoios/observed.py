@@ -81,6 +81,19 @@ class Observation:
     fallback_count: int = 0
     quota_before: float | None = None
     quota_after: float | None = None
+    # V2: separate process exit from verified outcome
+    execution_completed: bool | None = None
+    verified_success: bool | None = None
+    harness_id: str | None = None
+    session_id: str | None = None
+    process_id: str | None = None
+    trace_id: str | None = None
+    turn_id: str | None = None
+    bridge_generation: str | None = None
+    build_id: str | None = None
+    baseline_tokens: int | None = None
+    actual_tokens: int | None = None
+    quota_group: str | None = None
 
     def to_dict(self) -> dict:
         payload: dict = {
@@ -109,6 +122,28 @@ class Observation:
             payload["quota_before"] = self.quota_before
         if self.quota_after is not None:
             payload["quota_after"] = self.quota_after
+        if self.execution_completed is not None:
+            payload["execution_completed"] = self.execution_completed
+        if self.verified_success is not None:
+            payload["verified_success"] = self.verified_success
+        # ambient close may set completed=True while verified_success is null
+        for key in (
+            "harness_id",
+            "session_id",
+            "process_id",
+            "trace_id",
+            "turn_id",
+            "bridge_generation",
+            "build_id",
+            "quota_group",
+        ):
+            val = getattr(self, key, None)
+            if val:
+                payload[key] = val
+        if self.baseline_tokens is not None:
+            payload["baseline_tokens"] = self.baseline_tokens
+        if self.actual_tokens is not None:
+            payload["actual_tokens"] = self.actual_tokens
         return payload
 
 
@@ -140,14 +175,24 @@ class OutcomeStats:
 
 
 def _from_payload(payload: dict) -> Observation:
+    completed = bool(payload.get("completed", False))
+    execution_completed = payload.get("execution_completed")
+    if execution_completed is None and "execution_completed" not in payload:
+        # legacy: completed meant process finished
+        execution_completed = completed
+    else:
+        execution_completed = bool(execution_completed) if execution_completed is not None else None
+    verified = payload.get("verified_success", None)
+    if verified is not None:
+        verified = bool(verified)
     return Observation(
-        provider=payload["provider"],
-        model=payload["model"],
-        task_type=payload.get("task_type", "unknown"),
-        completed=bool(payload["completed"]),
-        actual_cost=float(payload["actual_cost"]),
+        provider=str(payload["provider"]),
+        model=str(payload["model"]),
+        task_type=str(payload.get("task_type") or "unknown"),
+        completed=completed,
+        actual_cost=float(payload.get("actual_cost") or 0.0),
         retried=bool(payload.get("retried", False)),
-        capability_id=(str(payload["capability_id"]) if payload.get("capability_id") else None),
+        capability_id=payload.get("capability_id"),
         input_tokens=_opt_int(payload.get("input_tokens")),
         output_tokens=_opt_int(payload.get("output_tokens")),
         cached_input_tokens=_opt_int(payload.get("cached_input_tokens")),
@@ -156,7 +201,20 @@ def _from_payload(payload: dict) -> Observation:
         fallback_count=int(payload.get("fallback_count") or 0),
         quota_before=_opt_float(payload.get("quota_before")),
         quota_after=_opt_float(payload.get("quota_after")),
+        execution_completed=execution_completed,
+        verified_success=verified,
+        harness_id=payload.get("harness_id"),
+        session_id=payload.get("session_id"),
+        process_id=payload.get("process_id"),
+        trace_id=payload.get("trace_id"),
+        turn_id=payload.get("turn_id"),
+        bridge_generation=payload.get("bridge_generation"),
+        build_id=payload.get("build_id"),
+        baseline_tokens=_opt_int(payload.get("baseline_tokens")),
+        actual_tokens=_opt_int(payload.get("actual_tokens")),
+        quota_group=payload.get("quota_group"),
     )
+
 
 
 def load_observations(*, path: Path | None = None) -> list[Observation]:
@@ -296,9 +354,10 @@ def tokens_per_verified_task(
     path: Path | None = None,
     capability_id: str | None = None,
 ) -> dict:
-    """Premium/frontier tokens per completed (verified) task.
+    """Premium/frontier tokens per *verified* task.
 
-    Uses input+output tokens on rows with ``completed=True``. Optional
+    Only rows with ``verified_success is True`` count. ``execution_completed``
+    alone (or legacy ``completed``) is not verified success. Optional
     ``capability_id`` filters exact id then family prefix.
     """
     rows = observations if observations is not None else load_observations(path=path)
@@ -307,7 +366,14 @@ def tokens_per_verified_task(
         fam = capability_family(capability_id)
         family_rows = [r for r in rows if r.capability_id and capability_family(r.capability_id) == fam] if fam else []
         rows = exact or family_rows or rows
-    completed = [r for r in rows if r.completed]
+    verified = [r for r in rows if r.verified_success is True]
+    # backward compat: only when verified_success field absent on legacy rows
+    if not verified:
+        legacy = [r for r in rows if r.verified_success is None and r.completed and r.execution_completed is not False]
+        # Still do NOT treat ambient completed as verified when V2 field present as null
+        # Legacy path: pre-V2 logs lack the key entirely → verified_success is None AND no execution_completed key path
+        verified = [r for r in legacy if r.execution_completed is None and r.completed]
+    completed = verified  # name used below
     token_rows = [
         r
         for r in completed
@@ -332,3 +398,76 @@ def tokens_per_verified_task(
         "completion_rate": (n_v / len(rows)) if rows else None,
     }
 
+
+
+def import_allocation_observations(
+    path: Path | str,
+    *,
+    dest: Path | None = None,
+) -> dict:
+    """Import z0int.allocation_observation.v1 JSONL into the observed log.
+
+    Maps execution_completed / verified_success without collapsing them.
+    Does not execute models.
+    """
+    src = Path(path)
+    count = 0
+    skipped = 0
+    for line in src.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        payload = json.loads(line)
+        schema = payload.get("schema") or payload.get("type")
+        if schema and schema not in (
+            "z0int.allocation_observation.v1",
+            "allocation_observation.v1",
+            "observation",
+        ):
+            # still accept plain Observation-shaped rows
+            if "provider" not in payload:
+                skipped += 1
+                continue
+        provider = payload.get("provider") or (payload.get("placement") or {}).get("provider")
+        model = payload.get("model") or (payload.get("placement") or {}).get("model")
+        if not provider or not model:
+            skipped += 1
+            continue
+        execution_completed = payload.get("execution_completed")
+        verified_success = payload.get("verified_success", None)
+        # ambient process close is not verified
+        completed_legacy = bool(payload.get("completed", False))
+        if execution_completed is None:
+            execution_completed = completed_legacy
+        obs = Observation(
+            provider=str(provider),
+            model=str(model),
+            task_type=str(payload.get("task_type") or payload.get("capability_id") or "unknown"),
+            completed=bool(execution_completed) if execution_completed is not None else completed_legacy,
+            actual_cost=float(payload.get("actual_cost") or payload.get("cost") or 0.0),
+            retried=bool(payload.get("retried", False)),
+            capability_id=payload.get("capability_id"),
+            input_tokens=_opt_int(payload.get("input_tokens") or payload.get("actual_input_tokens")),
+            output_tokens=_opt_int(payload.get("output_tokens") or payload.get("actual_output_tokens")),
+            cached_input_tokens=_opt_int(payload.get("cached_input_tokens")),
+            context_tokens=_opt_int(payload.get("context_tokens")),
+            latency_ms=_opt_float(payload.get("latency_ms")),
+            fallback_count=int(payload.get("fallback_count") or 0),
+            quota_before=_opt_float(payload.get("quota_before")),
+            quota_after=_opt_float(payload.get("quota_after")),
+            execution_completed=bool(execution_completed) if execution_completed is not None else None,
+            verified_success=bool(verified_success) if verified_success is not None else None,
+            harness_id=payload.get("harness_id"),
+            session_id=payload.get("session_id"),
+            process_id=payload.get("process_id"),
+            trace_id=payload.get("trace_id"),
+            turn_id=payload.get("turn_id"),
+            bridge_generation=payload.get("bridge_generation"),
+            build_id=payload.get("build_id"),
+            baseline_tokens=_opt_int(payload.get("baseline_tokens")),
+            actual_tokens=_opt_int(payload.get("actual_tokens")),
+            quota_group=payload.get("quota_group"),
+        )
+        record(obs, path=dest)
+        count += 1
+    return {"imported": count, "skipped": skipped, "path": str(dest or DEFAULT_LOG_PATH)}
