@@ -116,6 +116,9 @@ class WorkRequirement:
     privacy: PrivacyClass = "public"
     mode: Mode = Mode.BALANCED
     tools: tuple[str, ...] = ()
+    # Cross-repo bridge with z0int CapabilityCards (e.g. coding.delegate).
+    # Optional: residual allocator only; does not invent new capability axes.
+    capability_id: str | None = None
 
 
 @dataclass

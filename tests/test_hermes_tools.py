@@ -54,13 +54,15 @@ class RegisterTests(unittest.TestCase):
         ctx = _Ctx()
         register(ctx)
         props = ctx.tools["kerdoios_record"]["schema"]["parameters"]["properties"]
-        self.assertEqual(
-            set(props),
-            {"provider", "model", "task_type", "completed", "cost", "retried"},
-        )
+        required_keys = {"provider", "model", "task_type", "completed", "cost", "retried"}
+        self.assertTrue(required_keys.issubset(set(props)))
+        self.assertIn("capability_id", props)
+        self.assertIn("input_tokens", props)
+        self.assertIn("output_tokens", props)
         required = ctx.tools["kerdoios_record"]["schema"]["parameters"]["required"]
         self.assertEqual(set(required), {"provider", "model"})
         self.assertNotIn("remaining_free_quota", json.dumps(ctx.tools["kerdoios_record"]["schema"]))
+
 
     def test_plan_handler_passes_observed_to_plan(self) -> None:
         ctx = _Ctx()

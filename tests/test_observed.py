@@ -70,6 +70,65 @@ class AggregateTests(unittest.TestCase):
         self.assertTrue(s.trusted)
 
 
+class CapabilityAggregateTests(unittest.TestCase):
+    def test_token_fields_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "observed.jsonl"
+            record(
+                Observation(
+                    "astra",
+                    "gpt",
+                    "coding",
+                    True,
+                    0.0,
+                    capability_id="blender.scene_reasoning",
+                    input_tokens=4200,
+                    output_tokens=800,
+                    latency_ms=1800.0,
+                ),
+                path=path,
+            )
+            rows = load_observations(path=path)
+            self.assertEqual(rows[0].capability_id, "blender.scene_reasoning")
+            self.assertEqual(rows[0].input_tokens, 4200)
+
+    def test_lookup_prefers_exact_capability_when_trusted(self) -> None:
+        from kerdoios.observed import lookup_stats
+
+        rows = [
+            Observation("astra", "gpt", "coding", True, 0.0, capability_id="blender.scene_reasoning", input_tokens=1000)
+            for _ in range(MIN_OBSERVATIONS)
+        ] + [
+            Observation("astra", "gpt", "coding", False, 0.0, capability_id="coding.edit", input_tokens=5000)
+            for _ in range(MIN_OBSERVATIONS)
+        ]
+        # global completion rate diluted; exact blender should be perfect
+        stats = lookup_stats(provider="astra", model="gpt", capability_id="blender.scene_reasoning", observations=rows)
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertTrue(stats.trusted)
+        self.assertAlmostEqual(stats.completion_rate, 1.0)
+        self.assertEqual(stats.capability_id, "blender.scene_reasoning")
+
+    def test_lookup_falls_back_to_family(self) -> None:
+        from kerdoios.observed import lookup_stats
+
+        rows = [
+            Observation("astra", "gpt", "coding", True, 0.0, capability_id="blender.need_render")
+            for _ in range(MIN_OBSERVATIONS)
+        ]
+        stats = lookup_stats(
+            provider="astra",
+            model="gpt",
+            capability_id="blender.scene_reasoning",  # no exact rows
+            observations=rows,
+        )
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertEqual(stats.capability_id, "blender")
+        self.assertTrue(stats.trusted)
+
+
 class BlendTests(unittest.TestCase):
     def _bad_offer(self):
         return next(o for o in fixture_offers() if o.id == "frontier/paid")
@@ -132,23 +191,39 @@ class PlanIntegrationTests(unittest.TestCase):
 
             original = blend_mod.apply_observed
 
-            def patched(offers_in, *, path=None):
-                return original(offers_in, path=path or Path(tmp) / "observed.jsonl")
+            def patched(offers_in, *, path=None, capability_id=None):
+                return original(
+                    offers_in,
+                    path=path or Path(tmp) / "observed.jsonl",
+                    capability_id=capability_id,
+                )
 
             blend_mod.apply_observed = patched
             try:
                 import kerdoios.optimize as optimize_mod
 
                 optimize_mod.apply_observed = patched
-                req = WorkRequirement(coding=0.6, reasoning=0.6, tool_use=True, tools=("github",), context=128_000, parallelism=50, maximum_cost=1.0, mode=Mode.BALANCED)
+                req = WorkRequirement(
+                    coding=0.6,
+                    reasoning=0.6,
+                    tool_use=True,
+                    tools=("github",),
+                    context=128_000,
+                    parallelism=50,
+                    maximum_cost=1.0,
+                    mode=Mode.BALANCED,
+                )
                 built_plain = plan(offers, req, use_observed=False)
                 built_observed = plan(offers, req, use_observed=True)
                 plain_paid_workers = sum(p.workers for p in built_plain.placements if p.provider == "paid-api")
-                observed_paid_workers = sum(p.workers for p in built_observed.placements if p.provider == "paid-api")
+                observed_paid_workers = sum(
+                    p.workers for p in built_observed.placements if p.provider == "paid-api"
+                )
                 self.assertLessEqual(observed_paid_workers, plain_paid_workers)
             finally:
                 blend_mod.apply_observed = original
                 optimize_mod.apply_observed = original
+
 
 
 if __name__ == "__main__":

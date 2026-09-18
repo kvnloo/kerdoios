@@ -24,11 +24,13 @@ def _req(ns: argparse.Namespace) -> WorkRequirement:
         privacy=ns.privacy,
         mode=Mode(ns.mode),
         tools=("github",) if not ns.no_tools else (),
+        capability_id=getattr(ns, "capability_id", None),
     )
     path = getattr(ns, "aodl", None)
     if not path:
         return flags
     return work_requirement_from_aodl(load_aodl(path), defaults=flags)
+
 
 
 def _inventory_row(offer) -> dict:
@@ -85,6 +87,12 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="AODL-shaped work spec JSON path (or - for stdin)",
         )
+        item.add_argument(
+            "--capability-id",
+            dest="capability_id",
+            default=None,
+            help="z0int capability id for residual allocation (e.g. coding.delegate)",
+        )
 
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
@@ -93,6 +101,15 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--completed", action="store_true")
     record_p.add_argument("--cost", type=float, default=0.0)
     record_p.add_argument("--retried", action="store_true")
+    record_p.add_argument("--capability-id", dest="capability_id", default=None)
+    record_p.add_argument("--input-tokens", dest="input_tokens", type=int, default=None)
+    record_p.add_argument("--output-tokens", dest="output_tokens", type=int, default=None)
+    record_p.add_argument("--cached-input-tokens", dest="cached_input_tokens", type=int, default=None)
+    record_p.add_argument("--context-tokens", dest="context_tokens", type=int, default=None)
+    record_p.add_argument("--latency-ms", dest="latency_ms", type=float, default=None)
+    record_p.add_argument("--fallback-count", dest="fallback_count", type=int, default=0)
+    record_p.add_argument("--quota-before", dest="quota_before", type=float, default=None)
+    record_p.add_argument("--quota-after", dest="quota_after", type=float, default=None)
 
     ns = parser.parse_args(argv)
     if ns.command == "record":
@@ -104,6 +121,15 @@ def main(argv: list[str] | None = None) -> int:
                 completed=ns.completed,
                 actual_cost=ns.cost,
                 retried=ns.retried,
+                capability_id=ns.capability_id,
+                input_tokens=ns.input_tokens,
+                output_tokens=ns.output_tokens,
+                cached_input_tokens=ns.cached_input_tokens,
+                context_tokens=ns.context_tokens,
+                latency_ms=ns.latency_ms,
+                fallback_count=ns.fallback_count or 0,
+                quota_before=ns.quota_before,
+                quota_after=ns.quota_after,
             )
         )
         return 0

@@ -89,7 +89,7 @@ def allocate(offers: list[ScoredOffer], req: WorkRequirement) -> tuple[list[Plac
 
 def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: bool = False) -> ExecutionPlan:
     if use_observed:
-        offers = apply_observed(offers)
+        offers = apply_observed(offers, capability_id=req.capability_id)
     eligible, rejections = hard_filter(offers, req)
     weights = PRESETS[req.mode]
     scored = [score(offer, req, weights) for offer in eligible]

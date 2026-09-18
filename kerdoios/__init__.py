@@ -43,6 +43,7 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
         privacy=privacy,
         mode=mode,
         tools=tuple(tools) if tools else ("github",),
+        capability_id=(str(args["capability_id"]) if args.get("capability_id") else None),
     )
     aodl = args.get("aodl")
     if aodl is None or aodl == "":
@@ -94,6 +95,10 @@ PLAN_SCHEMA = {
                 "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
             },
             "aodl": {"description": "AODL-shaped work spec object or JSON path"},
+            "capability_id": {
+                "type": "string",
+                "description": "z0int capability id for residual work (e.g. coding.delegate, blender.scene_reasoning)",
+            },
         },
     },
 }
@@ -137,20 +142,30 @@ INVENTORY_SCHEMA = {
 
 RECORD_SCHEMA = {
     "name": "kerdoios_record",
-    "description": "Log an observed execution outcome.",
+    "description": "Log an observed execution outcome (optional capability_id + token receipts).",
     "parameters": {
         "type": "object",
         "properties": {
             "provider": {"type": "string"},
             "model": {"type": "string"},
-            "task_type": {"type": "string", "description": "Caller-controlled bucket (default unknown)"},
+            "task_type": {"type": "string", "description": "Caller-controlled coarse bucket (default unknown)"},
             "completed": {"type": "boolean"},
             "cost": {"type": "number", "description": "Actual cost in USD"},
             "retried": {"type": "boolean"},
+            "capability_id": {"type": "string", "description": "z0int capability id (e.g. coding.delegate)"},
+            "input_tokens": {"type": "integer"},
+            "output_tokens": {"type": "integer"},
+            "cached_input_tokens": {"type": "integer"},
+            "context_tokens": {"type": "integer"},
+            "latency_ms": {"type": "number"},
+            "fallback_count": {"type": "integer"},
+            "quota_before": {"type": "number"},
+            "quota_after": {"type": "number"},
         },
         "required": ["provider", "model"],
     },
 }
+
 
 
 def register(ctx: Any) -> None:
@@ -196,6 +211,19 @@ def register(ctx: Any) -> None:
             raise ValueError("kerdoios_record requires provider and model")
         cost_raw = args.get("cost")
         actual_cost = 0.0 if cost_raw is None or cost_raw == "" else float(cost_raw)
+
+        def _maybe_int(key: str) -> int | None:
+            v = args.get(key)
+            if v is None or v == "":
+                return None
+            return int(v)
+
+        def _maybe_float(key: str) -> float | None:
+            v = args.get(key)
+            if v is None or v == "":
+                return None
+            return float(v)
+
         observation = Observation(
             provider=provider,
             model=model,
@@ -203,9 +231,19 @@ def register(ctx: Any) -> None:
             completed=bool(args.get("completed")),
             actual_cost=actual_cost,
             retried=bool(args.get("retried")),
+            capability_id=(str(args["capability_id"]) if args.get("capability_id") else None),
+            input_tokens=_maybe_int("input_tokens"),
+            output_tokens=_maybe_int("output_tokens"),
+            cached_input_tokens=_maybe_int("cached_input_tokens"),
+            context_tokens=_maybe_int("context_tokens"),
+            latency_ms=_maybe_float("latency_ms"),
+            fallback_count=int(args.get("fallback_count") or 0),
+            quota_before=_maybe_float("quota_before"),
+            quota_after=_maybe_float("quota_after"),
         )
         record(observation)
         return json.dumps(observation.to_dict(), indent=2)
+
 
     ctx.register_tool(name="kerdoios_plan", toolset="kerdoios", schema=PLAN_SCHEMA, handler=handle_plan)
     ctx.register_tool(name="kerdoios_explain", toolset="kerdoios", schema=EXPLAIN_SCHEMA, handler=handle_explain)
@@ -224,10 +262,20 @@ def register(ctx: Any) -> None:
                         "completed": bool(getattr(ns, "completed", False)),
                         "cost": getattr(ns, "cost", 0.0),
                         "retried": bool(getattr(ns, "retried", False)),
+                        "capability_id": getattr(ns, "capability_id", None),
+                        "input_tokens": getattr(ns, "input_tokens", None),
+                        "output_tokens": getattr(ns, "output_tokens", None),
+                        "cached_input_tokens": getattr(ns, "cached_input_tokens", None),
+                        "context_tokens": getattr(ns, "context_tokens", None),
+                        "latency_ms": getattr(ns, "latency_ms", None),
+                        "fallback_count": getattr(ns, "fallback_count", 0),
+                        "quota_before": getattr(ns, "quota_before", None),
+                        "quota_after": getattr(ns, "quota_after", None),
                     }
                 )
             )
             return
+
         workers = int(getattr(ns, "workers", 8) or 8)
         budget = getattr(ns, "budget", None)
         mode = str(getattr(ns, "mode", "balanced") or "balanced")
@@ -246,6 +294,7 @@ def register(ctx: Any) -> None:
             "refresh": refresh,
             "observed": bool(getattr(ns, "observed", False)),
             "aodl": aodl,
+            "capability_id": getattr(ns, "capability_id", None),
         }
         if command == "inventory":
             print(handle_inventory(args))
@@ -270,13 +319,23 @@ def register(ctx: Any) -> None:
                 p.add_argument("--privacy", default="public")
                 p.add_argument("--observed", action="store_true")
                 p.add_argument("--aodl", default=None)
+                p.add_argument("--capability-id", dest="capability_id", default=None)
         record_p = subs.add_parser("record")
         record_p.add_argument("--provider", required=True)
         record_p.add_argument("--model", required=True)
-        record_p.add_argument("--task-type", default="unknown")
+        record_p.add_argument("--task-type", dest="task_type", default="unknown")
         record_p.add_argument("--completed", action="store_true")
         record_p.add_argument("--cost", type=float, default=0.0)
         record_p.add_argument("--retried", action="store_true")
+        record_p.add_argument("--capability-id", dest="capability_id", default=None)
+        record_p.add_argument("--input-tokens", dest="input_tokens", type=int, default=None)
+        record_p.add_argument("--output-tokens", dest="output_tokens", type=int, default=None)
+        record_p.add_argument("--cached-input-tokens", dest="cached_input_tokens", type=int, default=None)
+        record_p.add_argument("--context-tokens", dest="context_tokens", type=int, default=None)
+        record_p.add_argument("--latency-ms", dest="latency_ms", type=float, default=None)
+        record_p.add_argument("--fallback-count", dest="fallback_count", type=int, default=0)
+        record_p.add_argument("--quota-before", dest="quota_before", type=float, default=None)
+        record_p.add_argument("--quota-after", dest="quota_after", type=float, default=None)
         subparser.set_defaults(func=_cli)
 
     if hasattr(ctx, "register_cli_command"):

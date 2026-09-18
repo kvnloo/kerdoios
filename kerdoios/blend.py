@@ -25,7 +25,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from .observed import MIN_OBSERVATIONS, OutcomeStats, aggregate, load_observations
+from .observed import (
+    MIN_OBSERVATIONS,
+    OutcomeStats,
+    aggregate,
+    aggregate_by_capability,
+    load_observations,
+    lookup_stats,
+)
 from .types import ResourceOffer
 
 # Cap how far a single blend can move an offer, even with a huge observed
@@ -91,26 +98,45 @@ def blend_offer(offer: ResourceOffer, stats: OutcomeStats) -> ResourceOffer:
     )
 
 
-def apply_observed(offers: list[ResourceOffer], *, path=None) -> list[ResourceOffer]:
+def apply_observed(
+    offers: list[ResourceOffer],
+    *,
+    path=None,
+    capability_id: str | None = None,
+) -> list[ResourceOffer]:
     """Return offers with fields blended toward observed outcomes.
 
     No-op (returns offers unchanged) when there is no log or nothing meets
     MIN_OBSERVATIONS yet — this is opt-in and additive, never a silent
     behavior change for a fresh checkout.
+
+    When ``capability_id`` is set, prefer trusted (provider, model, capability)
+    stats, then family prefix, then global (provider, model).
     """
+
     observations = load_observations(path=path)
     if not observations:
         return offers
-    stats = aggregate(observations)
+    by_model = aggregate(observations)
+    by_cap = aggregate_by_capability(observations) if capability_id else {}
     blended: list[ResourceOffer] = []
     for offer in offers:
         if offer.model is None:
             blended.append(offer)
             continue
-        key = (offer.provider, offer.model)
-        offer_stats = stats.get(key)
+        if capability_id:
+            offer_stats = lookup_stats(
+                provider=offer.provider,
+                model=offer.model,
+                capability_id=capability_id,
+                by_capability=by_cap,
+                by_model=by_model,
+            )
+        else:
+            offer_stats = by_model.get((offer.provider, offer.model))
         if offer_stats is None:
             blended.append(offer)
             continue
         blended.append(blend_offer(offer, offer_stats))
     return blended
+
