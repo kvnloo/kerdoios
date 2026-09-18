@@ -122,10 +122,9 @@ class Observation:
             payload["quota_before"] = self.quota_before
         if self.quota_after is not None:
             payload["quota_after"] = self.quota_after
-        if self.execution_completed is not None:
-            payload["execution_completed"] = self.execution_completed
-        if self.verified_success is not None:
-            payload["verified_success"] = self.verified_success
+        # Always serialize V2 keys so null ≠ missing (legacy logs omit keys).
+        payload["execution_completed"] = self.execution_completed
+        payload["verified_success"] = self.verified_success
         # ambient close may set completed=True while verified_success is null
         for key in (
             "harness_id",
@@ -176,15 +175,20 @@ class OutcomeStats:
 
 def _from_payload(payload: dict) -> Observation:
     completed = bool(payload.get("completed", False))
-    execution_completed = payload.get("execution_completed")
-    if execution_completed is None and "execution_completed" not in payload:
-        # legacy: completed meant process finished
-        execution_completed = completed
+    has_v2 = "execution_completed" in payload or "verified_success" in payload
+    if "execution_completed" in payload:
+        raw_ex = payload.get("execution_completed")
+        execution_completed = None if raw_ex is None else bool(raw_ex)
     else:
-        execution_completed = bool(execution_completed) if execution_completed is not None else None
-    verified = payload.get("verified_success", None)
-    if verified is not None:
-        verified = bool(verified)
+        execution_completed = None
+    if "verified_success" in payload:
+        raw_v = payload.get("verified_success")
+        verified = None if raw_v is None else bool(raw_v)
+    elif has_v2:
+        verified = None
+    else:
+        # pre-V2 log line: completed stood in for verified success
+        verified = completed
     return Observation(
         provider=str(payload["provider"]),
         model=str(payload["model"]),
@@ -214,6 +218,7 @@ def _from_payload(payload: dict) -> Observation:
         actual_tokens=_opt_int(payload.get("actual_tokens")),
         quota_group=payload.get("quota_group"),
     )
+
 
 
 
@@ -366,14 +371,7 @@ def tokens_per_verified_task(
         fam = capability_family(capability_id)
         family_rows = [r for r in rows if r.capability_id and capability_family(r.capability_id) == fam] if fam else []
         rows = exact or family_rows or rows
-    verified = [r for r in rows if r.verified_success is True]
-    # backward compat: only when verified_success field absent on legacy rows
-    if not verified:
-        legacy = [r for r in rows if r.verified_success is None and r.completed and r.execution_completed is not False]
-        # Still do NOT treat ambient completed as verified when V2 field present as null
-        # Legacy path: pre-V2 logs lack the key entirely → verified_success is None AND no execution_completed key path
-        verified = [r for r in legacy if r.execution_completed is None and r.completed]
-    completed = verified  # name used below
+    completed = [r for r in rows if r.verified_success is True]
     token_rows = [
         r
         for r in completed

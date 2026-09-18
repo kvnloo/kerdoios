@@ -193,8 +193,11 @@ def main(argv: list[str] | None = None) -> int:
     if ns.command != "inventory":
         try:
             requirement = _req(ns)
-        except (AodlIngestError, AllocationRequestError) as exc:
-            print(f"requirement: {exc}", file=sys.stderr)
+        except AodlIngestError as exc:
+            print(f"aodl: {exc}", file=sys.stderr)
+            return 2
+        except AllocationRequestError as exc:
+            print(f"allocation_request: {exc}", file=sys.stderr)
             return 2
     include_fixture = True
     live = False

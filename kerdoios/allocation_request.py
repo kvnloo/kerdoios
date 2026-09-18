@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .types import Mode, QuotaConstraint, WorkRequirement
+from .types import Mode, PrivacyClass, QuotaConstraint, WorkRequirement
 
 
 SCHEMA = "z0int.allocation_request.v1"
@@ -77,7 +77,7 @@ def work_requirement_from_allocation_request(
             req_block.get("maximum_latency_ms") if "maximum_latency_ms" in req_block else base.maximum_latency_ms
         ),
         minimum_reliability=float(req_block.get("minimum_reliability", base.minimum_reliability)),
-        privacy=req_block.get("privacy", base.privacy),  # type: ignore[arg-type]
+        privacy=_privacy(req_block.get("privacy", base.privacy)),
         mode=mode,
         tools=tuple(req_block.get("tools") or base.tools),
         capability_id=req_block.get("capability_id") or doc.get("capability_id") or base.capability_id,
@@ -90,4 +90,10 @@ def work_requirement_from_allocation_request(
 def _opt_float(value: object) -> float | None:
     if value is None or value == "":
         return None
-    return float(value)  # type: ignore[arg-type]
+    return float(value)  # value pre-checked
+
+
+def _privacy(value: object) -> PrivacyClass:
+    if value in ("public", "confidential", "local_only"):
+        return value
+    return "public"
