@@ -10,7 +10,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from kerdoios.blend import MAX_BLEND_WEIGHT, _blend_weight, apply_observed, blend_offer
-from kerdoios.observed import MIN_OBSERVATIONS, Observation, aggregate, load_observations, record
+from kerdoios.observed import (
+    MIN_OBSERVATIONS,
+    Observation,
+    aggregate,
+    load_observations,
+    record,
+    tokens_per_verified_task,
+)
 from kerdoios.optimize import plan
 from kerdoios.providers.fixture import fixture_offers
 from kerdoios.types import Mode, WorkRequirement
@@ -127,6 +134,48 @@ class CapabilityAggregateTests(unittest.TestCase):
         assert stats is not None
         self.assertEqual(stats.capability_id, "blender")
         self.assertTrue(stats.trusted)
+
+
+class TokensPerVerifiedTests(unittest.TestCase):
+    def test_tokens_per_verified(self) -> None:
+        rows = [
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.02,
+                capability_id="recovery_action",
+                input_tokens=1000,
+                output_tokens=200,
+            ),
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.01,
+                capability_id="recovery_action",
+                input_tokens=500,
+                output_tokens=100,
+            ),
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                False,
+                0.0,
+                capability_id="recovery_action",
+                input_tokens=999,
+                output_tokens=0,
+            ),
+        ]
+        s = tokens_per_verified_task(rows, capability_id="recovery_action")
+        self.assertEqual(s["n_verified"], 2)
+        self.assertEqual(s["n_with_tokens"], 2)
+        # (1200+600)/2 = 900
+        self.assertAlmostEqual(s["tokens_per_verified_task"], 900.0)
+        self.assertAlmostEqual(s["mean_cost_per_verified"], 0.015)
 
 
 class BlendTests(unittest.TestCase):

@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .explain import explain
 from .inventory import discover_all
-from .observed import Observation, record
+from .observed import Observation, record, tokens_per_verified_task
 from .optimize import plan
 from .providers.free import is_free
 from .types import Mode, WorkRequirement
@@ -110,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--fallback-count", dest="fallback_count", type=int, default=0)
     record_p.add_argument("--quota-before", dest="quota_before", type=float, default=None)
     record_p.add_argument("--quota-after", dest="quota_after", type=float, default=None)
+    econ_p = sub.add_parser("economics", help="Tokens/cost per verified task from observed log")
+    econ_p.add_argument("--capability-id", dest="capability_id", default=None)
+    econ_p.add_argument("--path", type=Path, default=None, help="observed.jsonl override")
+
 
     ns = parser.parse_args(argv)
     if ns.command == "record":
@@ -130,6 +135,17 @@ def main(argv: list[str] | None = None) -> int:
                 fallback_count=ns.fallback_count or 0,
                 quota_before=ns.quota_before,
                 quota_after=ns.quota_after,
+            )
+        )
+        return 0
+    if ns.command == "economics":
+        print(
+            json.dumps(
+                tokens_per_verified_task(
+                    capability_id=getattr(ns, "capability_id", None),
+                    path=getattr(ns, "path", None),
+                ),
+                indent=2,
             )
         )
         return 0

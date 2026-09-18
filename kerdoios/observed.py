@@ -288,3 +288,47 @@ def lookup_stats(
     if trusted:
         return trusted[0]
     return candidates[0] if candidates else None
+
+
+def tokens_per_verified_task(
+    observations: list[Observation] | None = None,
+    *,
+    path: Path | None = None,
+    capability_id: str | None = None,
+) -> dict:
+    """Premium/frontier tokens per completed (verified) task.
+
+    Uses input+output tokens on rows with ``completed=True``. Optional
+    ``capability_id`` filters exact id then family prefix.
+    """
+    rows = observations if observations is not None else load_observations(path=path)
+    if capability_id:
+        exact = [r for r in rows if r.capability_id == capability_id]
+        fam = capability_family(capability_id)
+        family_rows = [r for r in rows if r.capability_id and capability_family(r.capability_id) == fam] if fam else []
+        rows = exact or family_rows or rows
+    completed = [r for r in rows if r.completed]
+    token_rows = [
+        r
+        for r in completed
+        if r.input_tokens is not None or r.output_tokens is not None
+    ]
+    total_tokens = 0
+    for r in token_rows:
+        total_tokens += int(r.input_tokens or 0) + int(r.output_tokens or 0)
+    n_v = len(completed)
+    n_tok = len(token_rows)
+    return {
+        "schema": "kerdoios.tokens_per_verified.v1",
+        "capability_id": capability_id,
+        "n_observations": len(rows),
+        "n_verified": n_v,
+        "n_with_tokens": n_tok,
+        "total_tokens_on_verified": total_tokens,
+        "tokens_per_verified_task": (total_tokens / n_tok) if n_tok else None,
+        "mean_cost_per_verified": (
+            sum(r.actual_cost for r in completed) / n_v if n_v else None
+        ),
+        "completion_rate": (n_v / len(rows)) if rows else None,
+    }
+
