@@ -1,3 +1,8 @@
+---
+name: pstack
+description: Use for rigor on a coding claim when pstack is installed (poteto-mode bar). Pointer only; the Cursor plugin is not vendored into this repo.
+---
+
 # pstack
 
 Harness-neutral pointer to [pstack](https://github.com/cursor/plugins/tree/main/pstack) (Lauren Tan / poteto, MIT). The Cursor plugin is the full pack (`/poteto-mode`, `/how`, `/unslop`, `/setup-pstack`, …). This kit does **not** copy that tree.
