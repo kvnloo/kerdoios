@@ -148,6 +148,8 @@ class TokensPerVerifiedTests(unittest.TestCase):
                 capability_id="recovery_action",
                 input_tokens=1000,
                 output_tokens=200,
+                execution_completed=True,
+                verified_success=True,
             ),
             Observation(
                 "openrouter",
@@ -158,6 +160,8 @@ class TokensPerVerifiedTests(unittest.TestCase):
                 capability_id="recovery_action",
                 input_tokens=500,
                 output_tokens=100,
+                execution_completed=True,
+                verified_success=True,
             ),
             Observation(
                 "openrouter",
@@ -166,14 +170,28 @@ class TokensPerVerifiedTests(unittest.TestCase):
                 False,
                 0.0,
                 capability_id="recovery_action",
+                input_tokens=100,
+                output_tokens=10,
+                execution_completed=False,
+                verified_success=False,
+            ),
+            # ambient close: completed but not verified — must not count
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.0,
+                capability_id="recovery_action",
                 input_tokens=999,
-                output_tokens=0,
+                output_tokens=999,
+                execution_completed=True,
+                verified_success=None,
             ),
         ]
         s = tokens_per_verified_task(rows, capability_id="recovery_action")
         self.assertEqual(s["n_verified"], 2)
-        self.assertEqual(s["n_with_tokens"], 2)
-        # (1200+600)/2 = 900
+        # 1000+200 + 500+100 = 1800 / 2 = 900
         self.assertAlmostEqual(s["tokens_per_verified_task"], 900.0)
         self.assertAlmostEqual(s["mean_cost_per_verified"], 0.015)
 

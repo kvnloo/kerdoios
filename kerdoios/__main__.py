@@ -6,9 +6,10 @@ import sys
 from pathlib import Path
 
 from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
+from .allocation_request import AllocationRequestError, load_allocation_request, work_requirement_from_allocation_request
 from .explain import explain
 from .inventory import discover_all
-from .observed import Observation, record, tokens_per_verified_task
+from .observed import Observation, import_allocation_observations, record, tokens_per_verified_task
 from .optimize import plan
 from .providers.free import is_free
 from .types import Mode, WorkRequirement
@@ -28,6 +29,9 @@ def _req(ns: argparse.Namespace) -> WorkRequirement:
         capability_id=getattr(ns, "capability_id", None),
     )
     path = getattr(ns, "aodl", None)
+    alloc = getattr(ns, "allocation_request", None)
+    if alloc:
+        return work_requirement_from_allocation_request(load_allocation_request(alloc), defaults=flags)
     if not path:
         return flags
     return work_requirement_from_aodl(load_aodl(path), defaults=flags)
@@ -94,6 +98,12 @@ def main(argv: list[str] | None = None) -> int:
             default=None,
             help="z0int capability id for residual allocation (e.g. coding.delegate)",
         )
+        item.add_argument(
+            "--allocation-request",
+            dest="allocation_request",
+            default=None,
+            help="z0int.allocation_request.v1 JSON path (or - for stdin)",
+        )
 
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
@@ -111,19 +121,38 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--fallback-count", dest="fallback_count", type=int, default=0)
     record_p.add_argument("--quota-before", dest="quota_before", type=float, default=None)
     record_p.add_argument("--quota-after", dest="quota_after", type=float, default=None)
+    record_p.add_argument("--execution-completed", dest="execution_completed", action="store_true")
+    record_p.add_argument("--verified-success", dest="verified_success", action="store_true")
+    record_p.add_argument("--verified-null", dest="verified_null", action="store_true", help="explicitly leave verified_success null")
+    record_p.add_argument("--harness-id", dest="harness_id", default=None)
+    record_p.add_argument("--session-id", dest="session_id", default=None)
+    record_p.add_argument("--trace-id", dest="trace_id", default=None)
+    record_p.add_argument("--turn-id", dest="turn_id", default=None)
+    record_p.add_argument("--quota-group", dest="quota_group", default=None)
+    obs_p = sub.add_parser("observations", help="Observation log utilities")
+    obs_sub = obs_p.add_subparsers(dest="obs_command", required=True)
+    obs_imp = obs_sub.add_parser("import", help="Import z0int.allocation_observation.v1 JSONL")
+    obs_imp.add_argument("path", type=Path, help="JSONL path")
+    obs_imp.add_argument("--dest", type=Path, default=None, help="observed.jsonl override")
     econ_p = sub.add_parser("economics", help="Tokens/cost per verified task from observed log")
     econ_p.add_argument("--capability-id", dest="capability_id", default=None)
     econ_p.add_argument("--path", type=Path, default=None, help="observed.jsonl override")
 
 
     ns = parser.parse_args(argv)
+    if ns.command == "observations":
+        if ns.obs_command == "import":
+            print(json.dumps(import_allocation_observations(ns.path, dest=ns.dest), indent=2))
+            return 0
+        print("unknown observations subcommand", file=sys.stderr)
+        return 2
     if ns.command == "record":
         record(
             Observation(
                 provider=ns.provider,
                 model=ns.model,
                 task_type=ns.task_type,
-                completed=ns.completed,
+                completed=ns.completed or bool(getattr(ns, "execution_completed", False)),
                 actual_cost=ns.cost,
                 retried=ns.retried,
                 capability_id=ns.capability_id,
@@ -135,6 +164,17 @@ def main(argv: list[str] | None = None) -> int:
                 fallback_count=ns.fallback_count or 0,
                 quota_before=ns.quota_before,
                 quota_after=ns.quota_after,
+                execution_completed=bool(getattr(ns, "execution_completed", False)) or ns.completed,
+                verified_success=(
+                    None
+                    if getattr(ns, "verified_null", False)
+                    else (True if getattr(ns, "verified_success", False) else None)
+                ),
+                harness_id=getattr(ns, "harness_id", None),
+                session_id=getattr(ns, "session_id", None),
+                trace_id=getattr(ns, "trace_id", None),
+                turn_id=getattr(ns, "turn_id", None),
+                quota_group=getattr(ns, "quota_group", None),
             )
         )
         return 0
@@ -155,6 +195,9 @@ def main(argv: list[str] | None = None) -> int:
             requirement = _req(ns)
         except AodlIngestError as exc:
             print(f"aodl: {exc}", file=sys.stderr)
+            return 2
+        except AllocationRequestError as exc:
+            print(f"allocation_request: {exc}", file=sys.stderr)
             return 2
     include_fixture = True
     live = False
