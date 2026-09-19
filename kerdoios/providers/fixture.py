@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from ..types import Access, AccessClass, AccessEvidence, CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
 
 
 def fixture_offers() -> list[ResourceOffer]:
@@ -19,6 +19,10 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=("github", "*"),
             source="fixture",
             confidence=0.7,
+            transport="groq",
+            creator="groq",
+            access=Access(access_class=AccessClass.FREE_TIER, evidence=AccessEvidence.PROVIDER_PLAN, remaining_known=True),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="cerebras/free-coder",
@@ -33,6 +37,10 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=("github", "*"),
             source="fixture",
             confidence=0.65,
+            transport="cerebras",
+            creator="cerebras",
+            access=Access(access_class=AccessClass.FREE_TIER, evidence=AccessEvidence.PROVIDER_PLAN, remaining_known=True),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="openrouter/free",
@@ -47,6 +55,10 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=("github", "*"),
             source="fixture",
             confidence=0.55,
+            transport="openrouter",
+            creator="openrouter",
+            access=Access(access_class=AccessClass.ZERO_PRICE, evidence=AccessEvidence.PROVIDER_CATALOG, remaining_known=True),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="local/qwen-32b",
@@ -62,6 +74,10 @@ def fixture_offers() -> list[ResourceOffer]:
             privacy_ok=("public", "confidential", "local_only"),
             source="fixture",
             confidence=0.8,
+            transport="local",
+            creator="local",
+            access=Access(access_class=AccessClass.LOCAL, evidence=AccessEvidence.PROVIDER_CATALOG, remaining_known=False),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="nous/hermes-70b",
@@ -76,6 +92,10 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=("github", "*"),
             source="fixture",
             confidence=0.75,
+            transport="nous-portal",
+            creator="nous-portal",
+            access=Access(access_class=AccessClass.FREE_TIER, evidence=AccessEvidence.PROVIDER_PLAN, remaining_known=True),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="frontier/paid",
@@ -90,6 +110,10 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=("github", "*"),
             source="fixture",
             confidence=0.9,
+            transport="paid-api",
+            creator="paid-api",
+            access=Access(access_class=AccessClass.PAID, evidence=AccessEvidence.PROVIDER_CATALOG, remaining_known=False),
+            freshness="fixture",
         ),
         ResourceOffer(
             id="tiny/8k-no-tools",
@@ -104,5 +128,9 @@ def fixture_offers() -> list[ResourceOffer]:
             tools=(),
             source="fixture",
             confidence=0.4,
+            transport="openrouter",
+            creator="openrouter",
+            access=Access(access_class=AccessClass.UNKNOWN, evidence=AccessEvidence.PROVIDER_CATALOG, remaining_known=False),
+            freshness="fixture",
         ),
     ]

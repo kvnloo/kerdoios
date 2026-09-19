@@ -34,7 +34,10 @@ from kerdoios.providers.fixture import fixture_offers
 # Catalog-shaped mocks only. CI must not need live Groq/Cerebras keys.
 _GROQ_MIXED = {
     "data": [
-        {"id": "llama-3.3-70b-versatile", "context_window": 131072},
+        {"id": "openai/gpt-oss-120b", "context_window": 131072},
+        {"id": "openai/gpt-oss-20b", "context_window": 131072},
+        {"id": "qwen/qwen3.8-27b", "context_window": 131042},
+        {"id": "groq/compound", "context_window": 131072},
         {"id": "vendor/custom:free", "context_window": 8192},
         {
             "id": "preview-zero",
@@ -42,6 +45,7 @@ _GROQ_MIXED = {
             "context_window": 8192,
         },
         {"id": "whisper-large-v3", "context_window": 448},
+        {"id": "llama-3.3-70b-versatile", "context_window": 131072},
         {
             "id": "enterprise-only",
             "pricing": {"prompt": "0.000001", "completion": "0.000002"},
@@ -122,14 +126,18 @@ class OpenRouterMapTests(unittest.TestCase):
         self.assertEqual(paid.capacity.context_window, 200000)
         self.assertEqual(free.tools, ("*",))
         self.assertEqual(paid.tools, ("*",))
-        self.assertEqual(free.provider, "meta")
-        self.assertEqual(paid.provider, "openai")
+        self.assertEqual(free.provider, "openrouter")
+        self.assertEqual(paid.provider, "openrouter")
+        self.assertEqual(free.transport, "openrouter")
+        self.assertEqual(paid.transport, "openrouter")
+        self.assertEqual(free.creator, "meta")
+        self.assertEqual(paid.creator, "openai")
         self.assertEqual(free.source, "openrouter:/api/v1/models")
         self.assertEqual(paid.source, "openrouter:/api/v1/models")
         self.assertEqual(free.model, "meta/llama:free")
         self.assertEqual(paid.model, "openai/gpt-x")
-        self.assertEqual(free.id, "meta/llama:free")
-        self.assertEqual(paid.id, "openai/gpt-x")
+        self.assertEqual(free.id, "openrouter/meta/llama:free")
+        self.assertEqual(paid.id, "openrouter/openai/gpt-x")
 
     def test_origin_providers_from_nvidia_and_google_free_ids(self) -> None:
         payload = {
@@ -152,17 +160,19 @@ class OpenRouterMapTests(unittest.TestCase):
         }
         offers = _offers_from_payload(payload)
         self.assertEqual(len(offers), 2)
-        providers = {o.provider for o in offers}
-        self.assertEqual(providers, {"nvidia", "google"})
-        self.assertNotIn("openrouter", providers)
-        nvidia = next(o for o in offers if o.provider == "nvidia")
-        google = next(o for o in offers if o.provider == "google")
+        transports = {o.transport for o in offers}
+        creators = {o.creator for o in offers}
+        self.assertEqual(transports, {"openrouter"})
+        self.assertEqual(creators, {"nvidia", "google"})
+        self.assertEqual({o.provider for o in offers}, {"openrouter"})
+        nvidia = next(o for o in offers if o.creator == "nvidia")
+        google = next(o for o in offers if o.creator == "google")
         self.assertEqual(nvidia.model, "nvidia/nemotron-3-nano:free")
         self.assertEqual(google.model, "google/gemma-4-31b-it:free")
         self.assertEqual(nvidia.source, "openrouter:/api/v1/models")
         self.assertEqual(google.source, "openrouter:/api/v1/models")
-        self.assertEqual(nvidia.id, "nvidia/nemotron-3-nano:free")
-        self.assertEqual(google.id, "google/gemma-4-31b-it:free")
+        self.assertEqual(nvidia.id, "openrouter/nvidia/nemotron-3-nano:free")
+        self.assertEqual(google.id, "openrouter/google/gemma-4-31b-it:free")
 
         with tempfile.TemporaryDirectory() as tmp:
             env = {**os.environ, "KERDOIOS_CACHE": tmp}
@@ -176,10 +186,11 @@ class OpenRouterMapTests(unittest.TestCase):
                 inventory = discover_all(include_fixture=True, live=True)
                 discovered = discover_all(include_fixture=False, live=True, free_only=True)
 
-        inv_origins = {o.provider for o in inventory if o.source == "openrouter:/api/v1/models"}
-        disc_origins = {o.provider for o in discovered if o.source == "openrouter:/api/v1/models"}
-        self.assertEqual(inv_origins, {"nvidia", "google"})
-        self.assertEqual(disc_origins, {"nvidia", "google"})
+        inv_creators = {o.creator for o in inventory if o.source == "openrouter:/api/v1/models"}
+        disc_creators = {o.creator for o in discovered if o.source == "openrouter:/api/v1/models"}
+        self.assertEqual(inv_creators, {"nvidia", "google"})
+        self.assertEqual(disc_creators, {"nvidia", "google"})
+        self.assertEqual({o.transport for o in inventory if o.source == "openrouter:/api/v1/models"}, {"openrouter"})
         self.assertTrue(any(o.id == "openrouter/free" and o.provider == "openrouter" for o in inventory))
 
     def test_discover_returns_empty_on_network_failure(self) -> None:
@@ -436,12 +447,14 @@ class LiveMergeTests(unittest.TestCase):
             merged = discover_all(include_fixture=True, live=True)
         live_rows = [o for o in merged if o.model == "free-pool" and o.source == "openrouter:/api/v1/models"]
         self.assertEqual(len(live_rows), 1)
-        self.assertEqual(live_rows[0].provider, "free-pool")
+        self.assertEqual(live_rows[0].provider, "openrouter")
+        self.assertEqual(live_rows[0].transport, "openrouter")
+        self.assertEqual(live_rows[0].creator, "free-pool")
         self.assertEqual(live_rows[0].source, "openrouter:/api/v1/models")
+        # Same transport+model must not leave a duplicate fixture reservoir.
         fixture_pool = [o for o in merged if o.id == "openrouter/free"]
-        self.assertEqual(len(fixture_pool), 1)
-        self.assertEqual(fixture_pool[0].provider, "openrouter")
-        self.assertEqual(fixture_pool[0].source, "fixture")
+        self.assertEqual(len(fixture_pool), 0)
+        self.assertTrue(any(o.source == "fixture" and o.transport == "groq" for o in merged))
 
     def test_free_only_uses_snapshot_when_live_empty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -458,8 +471,10 @@ class LiveMergeTests(unittest.TestCase):
         self.assertGreaterEqual(len(snap_rows), 10)
         self.assertTrue(all(o.source == "openrouter:snapshot" for o in snap_rows))
         origins = {o.provider for o in snap_rows}
-        self.assertIn("google", origins)
-        self.assertIn("nvidia", origins)
+        creators = {o.creator for o in snap_rows}
+        self.assertEqual(origins, {"openrouter"})
+        self.assertIn("google", creators)
+        self.assertIn("nvidia", creators)
         self.assertFalse(any(o.source == "fixture" for o in rows))
 
 
@@ -595,8 +610,17 @@ class KeyedFreeOverlayTests(unittest.TestCase):
         cerebras_models = {o.model for o in rows if o.provider == "cerebras"}
         self.assertEqual(
             groq_models,
-            {"llama-3.3-70b-versatile", "vendor/custom:free", "preview-zero"},
+            {
+                "openai/gpt-oss-120b",
+                "openai/gpt-oss-20b",
+                "qwen/qwen3.8-27b",
+                "groq/compound",
+                "vendor/custom:free",
+                "preview-zero",
+            },
         )
+        self.assertNotIn("llama-3.3-70b-versatile", groq_models)
+        self.assertNotIn("whisper-large-v3", groq_models)
         self.assertEqual(cerebras_models, {"gpt-oss-120b", "trial-flagged"})
         self.assertTrue(
             any(o.model == "meta/llama:free" and str(o.source).startswith("openrouter:") for o in rows)
@@ -624,8 +648,9 @@ class KeyedFreeOverlayTests(unittest.TestCase):
         ):
             rows = discover_all(include_fixture=False, live=True, free_only=True)
         self.assertTrue(any(o.source == "openrouter:snapshot" for o in rows))
-        self.assertTrue(any(o.provider == "groq" and o.model == "llama-3.3-70b-versatile" for o in rows))
+        self.assertTrue(any(o.provider == "groq" and o.model == "openai/gpt-oss-120b" for o in rows))
         self.assertFalse(any(o.provider == "groq" and o.model == "whisper-large-v3" for o in rows))
+        self.assertFalse(any(o.provider == "groq" and o.model == "llama-3.3-70b-versatile" for o in rows))
         self.assertFalse(any(o.source == "fixture" for o in rows))
 
     def test_live_keeps_non_free_keyed_rows(self) -> None:

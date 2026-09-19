@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
@@ -18,6 +18,54 @@ class Mode(str, Enum):
     MAX = "max"
     SCALE = "scale"
     PRIVATE = "private"
+
+
+class AccessClass(str, Enum):
+    LOCAL = "local"
+    ZERO_PRICE = "zero_price"
+    FREE_TIER = "free_tier"
+    RECURRING_CREDIT = "recurring_credit"
+    TRIAL_CREDIT = "trial_credit"
+    PROMOTIONAL = "promotional"
+    PAID = "paid"
+    UNKNOWN = "unknown"
+
+
+class AccessEvidence(str, Enum):
+    PROVIDER_CATALOG = "provider_catalog"
+    PROVIDER_PLAN = "provider_plan"
+    ACCOUNT_ENTITLEMENT = "account_entitlement"
+    OBSERVED = "observed"
+
+
+FREE_ACCESS_CLASSES = frozenset(
+    {
+        AccessClass.LOCAL,
+        AccessClass.ZERO_PRICE,
+        AccessClass.FREE_TIER,
+        AccessClass.RECURRING_CREDIT,
+        AccessClass.TRIAL_CREDIT,
+        AccessClass.PROMOTIONAL,
+    }
+)
+
+
+@dataclass(frozen=True)
+class Access:
+    """Typed free/paid entitlement. Never invent a remaining quantity."""
+
+    access_class: AccessClass = AccessClass.UNKNOWN
+    evidence: AccessEvidence = AccessEvidence.PROVIDER_CATALOG
+    remaining_known: bool = False
+    restriction: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "access_class": self.access_class.value,
+            "evidence": self.evidence.value,
+            "remaining_known": self.remaining_known,
+            "restriction": self.restriction,
+        }
 
 
 @dataclass(frozen=True)
@@ -95,9 +143,25 @@ class ResourceOffer:
     privacy_ok: tuple[PrivacyClass, ...] = ("public", "confidential")
     source: str = "fixture"
     confidence: float = 0.5
+    # Transport = billing/quota/auth authority. Creator = model author namespace.
+    # ``provider`` remains the legacy alias for transport (cheap BC).
+    transport: str | None = None
+    creator: str | None = None
+    access: Access | None = None
+    freshness: str | None = None  # fresh | stale | snapshot | fixture | unknown
+
+    def __post_init__(self) -> None:
+        if self.transport is None:
+            object.__setattr__(self, "transport", self.provider)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        raw = asdict(self)
+        if self.access is not None:
+            raw["access"] = self.access.to_dict()
+        else:
+            raw["access"] = None
+        raw["transport"] = self.transport or self.provider
+        return raw
 
 
 @dataclass(frozen=True)
@@ -148,6 +212,8 @@ class Placement:
     workers: int
     estimated_cost: float
     reasons: list[str] = field(default_factory=list)
+    transport: str | None = None
+    creator: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

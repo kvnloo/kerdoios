@@ -53,19 +53,33 @@ def _req_from_args(args: dict[str, Any]) -> WorkRequirement:
 
 
 def _inventory_row(offer: Any) -> dict[str, Any]:
+    access = getattr(offer, "access", None)
+    remaining = None
+    if access is not None and getattr(access, "remaining_known", False):
+        remaining = {
+            "free_quota": offer.economics.remaining_free_quota,
+            "credits": offer.economics.remaining_credits,
+        }
     return {
         "id": offer.id,
+        "transport": getattr(offer, "transport", None) or offer.provider,
         "provider": offer.provider,
+        "creator": getattr(offer, "creator", None),
         "model": offer.model,
+        "access_class": None if access is None else access.access_class.value,
+        "remaining": remaining,
+        "remaining_known": False if access is None else bool(access.remaining_known),
         "concurrency": offer.capacity.concurrency,
         "context": offer.capacity.context_window,
         "source": offer.source,
+        "freshness": getattr(offer, "freshness", None),
         "free": is_free(offer),
         "prices": {
             "input": offer.economics.input_token_price,
             "output": offer.economics.output_token_price,
         },
         "tools": list(offer.tools),
+        "access": None if access is None else access.to_dict(),
     }
 
 

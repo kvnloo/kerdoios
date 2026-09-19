@@ -1,4 +1,8 @@
-"""OpenRouter catalog. The /models endpoint is public; a key is optional."""
+"""OpenRouter catalog. The /models endpoint is public; a key is optional.
+
+Transport/billing authority is always ``openrouter``. The model-id namespace
+prefix is the creator (nvidia, google, …), never the Kerdoios provider.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,16 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from ..types import (
+    Access,
+    AccessClass,
+    AccessEvidence,
+    CapabilityProfile,
+    Capacity,
+    Economics,
+    ResourceOffer,
+    Telemetry,
+)
 from .http import get_json_response, quota_from_headers
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
@@ -33,6 +46,26 @@ def _supports_tools(item: dict[str, Any]) -> bool:
     return "tools" in keys or "tool_choice" in keys
 
 
+def _access_for_row(*, mid: str, inp: float | None, out: float | None, remaining_known: bool) -> Access:
+    if ":free" in mid.lower() or (inp == 0 and out == 0 and inp is not None and out is not None):
+        return Access(
+            access_class=AccessClass.ZERO_PRICE,
+            evidence=AccessEvidence.PROVIDER_CATALOG,
+            remaining_known=remaining_known,
+        )
+    if remaining_known:
+        return Access(
+            access_class=AccessClass.FREE_TIER,
+            evidence=AccessEvidence.ACCOUNT_ENTITLEMENT,
+            remaining_known=True,
+        )
+    return Access(
+        access_class=AccessClass.PAID if (inp or 0) > 0 or (out or 0) > 0 else AccessClass.UNKNOWN,
+        evidence=AccessEvidence.PROVIDER_CATALOG,
+        remaining_known=False,
+    )
+
+
 def _offers_from_payload(
     payload: dict[str, Any],
     *,
@@ -40,6 +73,7 @@ def _offers_from_payload(
     seconds_until_quota_reset: float | None = None,
 ) -> list[ResourceOffer]:
     offers: list[ResourceOffer] = []
+    remaining_known = remaining_free_quota is not None
     for item in payload.get("data") or []:
         mid = str(item.get("id") or "")
         if not mid:
@@ -55,17 +89,23 @@ def _offers_from_payload(
         arch = item.get("architecture") or {}
         modality = str(arch.get("modality") or "")
         vision = 0.7 if "image" in modality.lower() else 0.0
-        free = ":free" in mid.lower() or (inp == 0 and out == 0)
+        free = ":free" in mid.lower() or (inp == 0 and out == 0 and inp is not None and out is not None)
         has_tools = _supports_tools(item)
-        origin = mid.split("/", 1)[0] or "openrouter"
-        offer_id = mid if mid.startswith(f"{origin}/") else f"{origin}/{mid}"
+        creator = mid.split("/", 1)[0] or "unknown"
+        offer_id = f"openrouter/{mid}"
         # Paid rows must not inherit rate-limit remaining; that field would mark them free.
         row_quota = remaining_free_quota if free and remaining_free_quota is not None else 0.0
         row_reset = seconds_until_quota_reset if free and remaining_free_quota is not None else None
+        access = _access_for_row(
+            mid=mid,
+            inp=inp,
+            out=out,
+            remaining_known=bool(free and remaining_known),
+        )
         offers.append(
             ResourceOffer(
                 id=offer_id,
-                provider=origin,
+                provider="openrouter",
                 resource_type="llm",
                 model=mid,
                 local=False,
@@ -89,6 +129,10 @@ def _offers_from_payload(
                 tools=("*",) if has_tools else (),
                 source="openrouter:/api/v1/models",
                 confidence=0.7,
+                transport="openrouter",
+                creator=creator,
+                access=access,
+                freshness="fresh",
             )
         )
     return offers
@@ -115,4 +159,7 @@ def discover_snapshot() -> list[ResourceOffer]:
         payload = json.loads(_SNAPSHOT.read_text())
     except (OSError, json.JSONDecodeError):
         return []
-    return [replace(o, source="openrouter:snapshot", confidence=0.55) for o in _offers_from_payload(payload)]
+    return [
+        replace(o, source="openrouter:snapshot", confidence=0.55, freshness="snapshot")
+        for o in _offers_from_payload(payload)
+    ]

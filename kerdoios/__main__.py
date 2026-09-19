@@ -15,6 +15,46 @@ from .providers.free import is_free
 from .types import Mode, WorkRequirement
 
 
+
+def _inventory_table(offers) -> str:
+    headers = (
+        "TRANSPORT",
+        "CREATOR",
+        "MODEL",
+        "ACCESS_CLASS",
+        "REMAINING",
+        "RESET/EXPIRY",
+        "CONTEXT",
+        "TOOLS",
+        "SOURCE",
+        "FRESHNESS",
+    )
+    lines = ["\t".join(headers)]
+    for offer in offers:
+        access = offer.access
+        remaining = "unknown"
+        if access is not None and access.remaining_known:
+            remaining = str(offer.economics.remaining_free_quota or offer.economics.remaining_credits)
+        reset = offer.economics.seconds_until_quota_reset or offer.economics.seconds_until_credits_expire
+        lines.append(
+            "\t".join(
+                [
+                    str(offer.transport or offer.provider),
+                    str(offer.creator or ""),
+                    str(offer.model or ""),
+                    "" if access is None else access.access_class.value,
+                    remaining,
+                    "" if reset is None else str(reset),
+                    str(offer.capacity.context_window),
+                    ",".join(offer.tools) if offer.tools else "-",
+                    str(offer.source),
+                    str(offer.freshness or ""),
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
 def _req(ns: argparse.Namespace) -> WorkRequirement:
     flags = WorkRequirement(
         coding=ns.coding,
@@ -39,19 +79,35 @@ def _req(ns: argparse.Namespace) -> WorkRequirement:
 
 
 def _inventory_row(offer) -> dict:
+    access = offer.access
+    remaining = None
+    if access is not None and access.remaining_known:
+        remaining = {
+            "free_quota": offer.economics.remaining_free_quota,
+            "credits": offer.economics.remaining_credits,
+        }
+    reset = offer.economics.seconds_until_quota_reset or offer.economics.seconds_until_credits_expire
     return {
         "id": offer.id,
+        "transport": offer.transport or offer.provider,
         "provider": offer.provider,
+        "creator": offer.creator,
         "model": offer.model,
+        "access_class": None if access is None else access.access_class.value,
+        "remaining": remaining,
+        "remaining_known": False if access is None else access.remaining_known,
+        "reset_or_expiry": reset,
         "concurrency": offer.capacity.concurrency,
         "context": offer.capacity.context_window,
         "source": offer.source,
+        "freshness": offer.freshness,
         "free": is_free(offer),
         "prices": {
             "input": offer.economics.input_token_price,
             "output": offer.economics.output_token_price,
         },
         "tools": list(offer.tools),
+        "access": None if access is None else access.to_dict(),
     }
 
 
@@ -68,6 +124,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Keep free models as the initial list (OpenRouter public/snapshot, plus keyed Groq/Cerebras free-tier; implies live, omits fixture)",
     )
     inv_p.add_argument("--refresh", action="store_true", help="Bypass inventory cache and fetch live OpenRouter")
+    inv_p.add_argument("--include-fixture", action="store_true", help="Include deterministic fixture rows in inventory output")
+    inv_p.add_argument("--json", action="store_true", help="Emit complete typed JSON (default for inventory)")
+    inv_p.add_argument("--table", action="store_true", help="Emit a human-readable free-capacity table")
+
+    doctor_p = sub.add_parser("doctor", help="Diagnose provider auth/catalog without running inventory")
+    doctor_p.add_argument("provider", nargs="?", default=None, help="Provider name (default: all registered)")
+    doctor_p.add_argument("--probe", action="store_true", help="Opt-in: one minimal chat completion against an accessible model")
 
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
@@ -189,6 +252,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if ns.command == "doctor":
+        from .doctor import run_doctor
+
+        print(json.dumps(run_doctor(getattr(ns, "provider", None), probe=bool(getattr(ns, "probe", False))), indent=2))
+        return 0
     requirement = None
     if ns.command != "inventory":
         try:
@@ -199,18 +267,24 @@ def main(argv: list[str] | None = None) -> int:
         except AllocationRequestError as exc:
             print(f"allocation_request: {exc}", file=sys.stderr)
             return 2
+
     include_fixture = True
     live = False
     free_only = bool(getattr(ns, "free", False))
     refresh = bool(getattr(ns, "refresh", False))
     if ns.command == "inventory":
-        include_fixture = not ns.no_fixture
+        include_fixture = bool(getattr(ns, "include_fixture", False)) or (not ns.no_fixture and not free_only)
+        if free_only and not getattr(ns, "include_fixture", False):
+            include_fixture = False
+        if getattr(ns, "no_fixture", False):
+            include_fixture = False
         live = ns.live
     else:
         live = bool(getattr(ns, "live", False))
     if free_only:
         live = True
-        include_fixture = False
+        if not getattr(ns, "include_fixture", False):
+            include_fixture = False
     offers = discover_all(
         include_fixture=include_fixture,
         live=live,
@@ -218,7 +292,11 @@ def main(argv: list[str] | None = None) -> int:
         refresh=refresh,
     )
     if ns.command == "inventory":
-        print(json.dumps([_inventory_row(o) for o in offers], indent=2))
+        rows = [_inventory_row(o) for o in offers]
+        if getattr(ns, "table", False):
+            print(_inventory_table(offers))
+        else:
+            print(json.dumps(rows, indent=2))
         return 0
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":

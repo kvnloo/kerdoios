@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Mapping
 
 # Named remaining-quota first, then token remaining. Request-count headers are the wrong unit.
@@ -30,10 +31,53 @@ _HMS_DURATION = re.compile(
 )
 
 
+class FailureClass(str, Enum):
+    AUTH_INVALID = "AUTH_INVALID"
+    AUTH_FORBIDDEN = "AUTH_FORBIDDEN"
+    TEAM_BALANCE_REQUIRED = "TEAM_BALANCE_REQUIRED"
+    RATE_LIMITED = "RATE_LIMITED"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+    NETWORK = "NETWORK"
+    DECODE = "DECODE"
+    UNKNOWN = "UNKNOWN"
+    WORKING = "WORKING"
+
+
 @dataclass(frozen=True)
 class JsonResponse:
     body: dict[str, Any]
     headers: dict[str, str]
+
+
+@dataclass(frozen=True)
+class FetchFailure:
+    provider: str
+    endpoint_class: str
+    status: int | None
+    failure_class: FailureClass
+    message: str = ""
+    sanitized_code: str | None = None
+    retry_after: str | None = None
+    rate_limit_headers: dict[str, str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "endpoint_class": self.endpoint_class,
+            "status": self.status,
+            "failure_class": self.failure_class.value,
+            "message": self.message,
+            "sanitized_code": self.sanitized_code,
+            "retry_after": self.retry_after,
+            "rate_limit_headers": dict(self.rate_limit_headers or {}),
+        }
+
+
+@dataclass(frozen=True)
+class FetchResult:
+    ok: JsonResponse | None = None
+    failure: FetchFailure | None = None
 
 
 def _header_map(raw: Mapping[str, Any] | object) -> dict[str, str]:
@@ -113,9 +157,82 @@ def quota_from_headers(
     return None, None
 
 
-def get_json_response(
-    url: str, *, api_key: str | None = None, timeout: float = 12.0
-) -> JsonResponse | None:
+def classify_http_status(status: int | None, *, provider: str = "") -> FailureClass:
+    if status is None:
+        return FailureClass.UNKNOWN
+    if status == 401:
+        return FailureClass.AUTH_INVALID
+    if status == 402:
+        # Cerebras documents Team keys without balance as 402.
+        if provider == "cerebras":
+            return FailureClass.TEAM_BALANCE_REQUIRED
+        return FailureClass.TEAM_BALANCE_REQUIRED
+    if status == 403:
+        return FailureClass.AUTH_FORBIDDEN
+    if status == 404:
+        return FailureClass.MODEL_UNAVAILABLE
+    if status == 429:
+        return FailureClass.RATE_LIMITED
+    if 500 <= status <= 599:
+        return FailureClass.PROVIDER_ERROR
+    return FailureClass.UNKNOWN
+
+
+def _sanitize_error_body(raw: bytes | str | None) -> tuple[str, str | None]:
+    if raw is None:
+        return "", None
+    text = raw.decode("utf-8", errors="replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    text = text.strip()
+    if not text:
+        return "", None
+    code: str | None = None
+    message = text[:240]
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return message, None
+    if isinstance(payload, dict):
+        err = payload.get("error")
+        if isinstance(err, dict):
+            message = str(err.get("message") or err.get("type") or message)[:240]
+            code_raw = err.get("code") or err.get("type")
+            if code_raw is not None:
+                code = str(code_raw)[:80]
+        elif isinstance(err, str):
+            message = err[:240]
+        else:
+            message = str(payload.get("message") or message)[:240]
+            if payload.get("code") is not None:
+                code = str(payload.get("code"))[:80]
+    # Never keep secret-looking substrings in diagnostic text.
+    lowered = message.lower()
+    for needle in ("bearer ", "authorization:", "api_key", "api-key", "sk-", "csk_"):
+        if needle in lowered:
+            message = "[redacted]"
+            break
+    return message, code
+
+
+_RATE_HEADER_PREFIXES = ("x-ratelimit", "ratelimit", "retry-after", "remaining-quota", "x-remaining")
+
+
+def _rate_headers(mapped: dict[str, str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for key, value in mapped.items():
+        if key == "retry-after" or any(key.startswith(p) for p in _RATE_HEADER_PREFIXES):
+            out[key] = value
+    return out
+
+
+def get_json_result(
+    url: str,
+    *,
+    api_key: str | None = None,
+    timeout: float = 12.0,
+    provider: str = "",
+    endpoint_class: str = "catalog",
+) -> FetchResult:
+    """Typed fetch. Never persists Authorization / API keys."""
     headers = {"User-Agent": "kerdoios/0.1", "Accept": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -124,11 +241,79 @@ def get_json_response(
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw_headers = _header_map(resp.headers)
             body = json.loads(resp.read().decode())
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return None
+    except urllib.error.HTTPError as exc:
+        err_headers = _header_map(getattr(exc, "headers", {}) or {})
+        try:
+            payload = exc.read()
+        except Exception:  # noqa: BLE001 — best-effort body
+            payload = b""
+        message, code = _sanitize_error_body(payload)
+        if not message:
+            message = str(exc.reason or exc)[:240]
+        return FetchResult(
+            failure=FetchFailure(
+                provider=provider,
+                endpoint_class=endpoint_class,
+                status=int(exc.code) if exc.code is not None else None,
+                failure_class=classify_http_status(
+                    int(exc.code) if exc.code is not None else None,
+                    provider=provider,
+                ),
+                message=message,
+                sanitized_code=code,
+                retry_after=err_headers.get("retry-after"),
+                rate_limit_headers=_rate_headers(err_headers) or None,
+            )
+        )
+    except urllib.error.URLError as exc:
+        return FetchResult(
+            failure=FetchFailure(
+                provider=provider,
+                endpoint_class=endpoint_class,
+                status=None,
+                failure_class=FailureClass.NETWORK,
+                message=str(getattr(exc, "reason", exc))[:240],
+            )
+        )
+    except TimeoutError as exc:
+        return FetchResult(
+            failure=FetchFailure(
+                provider=provider,
+                endpoint_class=endpoint_class,
+                status=None,
+                failure_class=FailureClass.NETWORK,
+                message=str(exc)[:240] or "timeout",
+            )
+        )
+    except (json.JSONDecodeError, OSError) as exc:
+        return FetchResult(
+            failure=FetchFailure(
+                provider=provider,
+                endpoint_class=endpoint_class,
+                status=None,
+                failure_class=FailureClass.DECODE if isinstance(exc, json.JSONDecodeError) else FailureClass.NETWORK,
+                message=str(exc)[:240],
+            )
+        )
     if not isinstance(body, dict):
-        return None
-    return JsonResponse(body=body, headers=raw_headers)
+        return FetchResult(
+            failure=FetchFailure(
+                provider=provider,
+                endpoint_class=endpoint_class,
+                status=None,
+                failure_class=FailureClass.DECODE,
+                message="response body was not a JSON object",
+            )
+        )
+    return FetchResult(ok=JsonResponse(body=body, headers=raw_headers))
+
+
+def get_json_response(
+    url: str, *, api_key: str | None = None, timeout: float = 12.0
+) -> JsonResponse | None:
+    """Quiet fail-open wrapper for ordinary inventory adapters."""
+    result = get_json_result(url, api_key=api_key, timeout=timeout)
+    return result.ok
 
 
 def get_json(url: str, *, api_key: str | None = None, timeout: float = 12.0) -> dict[str, Any] | None:

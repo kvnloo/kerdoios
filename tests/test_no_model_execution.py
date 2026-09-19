@@ -50,6 +50,9 @@ class NoModelExecutionTests(unittest.TestCase):
         hits: list[str] = []
         for path in _package_py_files():
             rel = str(path.relative_to(ROOT))
+            # doctor.py may POST one minimal completion under explicit --probe.
+            if rel.endswith("kerdoios/doctor.py"):
+                continue
             for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if _LITELLM_ATTR.search(line) or _CHAT_HTTP.search(line) or _POST_HELPER.search(line):
                     hits.append(f"{rel}:{i}:{line.strip()}")

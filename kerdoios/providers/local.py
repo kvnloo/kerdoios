@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import os
 
-from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
+from ..types import (
+    Access,
+    AccessClass,
+    AccessEvidence,
+    CapabilityProfile,
+    Capacity,
+    Economics,
+    ResourceOffer,
+    Telemetry,
+)
 from .base import ResourceProvider
 from .http import get_json
 
@@ -20,7 +29,8 @@ def _bases() -> list[str]:
     return bases
 
 
-def discover() -> list[ResourceOffer]:
+def discover(*, free_only: bool = False) -> list[ResourceOffer]:
+    _ = free_only
     offers: list[ResourceOffer] = []
     seen: set[str] = set()
     for base in _bases():
@@ -55,6 +65,14 @@ def discover() -> list[ResourceOffer]:
                     privacy_ok=("public", "confidential", "local_only"),
                     source=base,
                     confidence=0.6,
+                    transport="local",
+                    creator="local",
+                    access=Access(
+                        access_class=AccessClass.LOCAL,
+                        evidence=AccessEvidence.PROVIDER_CATALOG,
+                        remaining_known=False,
+                    ),
+                    freshness="fresh",
                 )
             )
     return offers

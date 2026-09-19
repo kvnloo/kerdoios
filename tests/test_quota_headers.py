@@ -57,11 +57,11 @@ class _FakeHTTP:
 
 
 def _groq_body() -> dict:
-    return {"data": [{"id": "llama-3.3-70b", "context_window": 128000}]}
+    return {"data": [{"id": "openai/gpt-oss-120b", "context_window": 128000}]}
 
 
 def _cerebras_body() -> dict:
-    return {"data": [{"id": "qwen-3-32b", "context_length": 128000}]}
+    return {"data": [{"id": "openai/gpt-oss-120b", "context_length": 128000}]}
 
 
 def _openrouter_body() -> dict:

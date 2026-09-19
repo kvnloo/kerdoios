@@ -77,6 +77,8 @@ def allocate(offers: list[ScoredOffer], req: WorkRequirement) -> tuple[list[Plac
                 offer_id=item.offer.id,
                 provider=item.offer.provider,
                 model=item.offer.model,
+                transport=item.offer.transport or item.offer.provider,
+                creator=item.offer.creator,
                 workers=take,
                 estimated_cost=round(cost, 6),
                 reasons=list(item.reasons),

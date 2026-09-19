@@ -60,6 +60,20 @@ def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
         tools = raw.get("tools") or ()
         privacy = raw.get("privacy_ok") or ("public", "confidential")
         model = raw.get("model")
+        access_raw = raw.get("access")
+        access = None
+        if isinstance(access_raw, dict) and access_raw.get("access_class"):
+            from .types import Access, AccessClass, AccessEvidence
+
+            try:
+                access = Access(
+                    access_class=AccessClass(str(access_raw.get("access_class"))),
+                    evidence=AccessEvidence(str(access_raw.get("evidence") or "provider_catalog")),
+                    remaining_known=bool(access_raw.get("remaining_known")),
+                    restriction=access_raw.get("restriction"),
+                )
+            except ValueError:
+                access = None
         return ResourceOffer(
             id=str(raw["id"]),
             provider=str(raw["provider"]),
@@ -74,6 +88,10 @@ def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
             privacy_ok=tuple(privacy),
             source=str(raw.get("source") or "cache"),
             confidence=float(raw.get("confidence") or 0.5),
+            transport=str(raw["transport"]) if raw.get("transport") else None,
+            creator=str(raw["creator"]) if raw.get("creator") else None,
+            access=access,
+            freshness=str(raw["freshness"]) if raw.get("freshness") else None,
         )
     except (TypeError, ValueError, KeyError):
         return None
