@@ -15,6 +15,12 @@ def explain(offers: list[ResourceOffer], req: WorkRequirement, built: ExecutionP
     if result.unplaced_workers:
         lines.append(f"Unplaced workers: {result.unplaced_workers} (capacity, budget, or FREE-mode paid skip)")
         lines.append("")
+    if result.no_free_capacity:
+        lines.append(
+            "No free capacity: free-only policy blocked paid spill; "
+            "the plan places nothing rather than billing."
+        )
+        lines.append("")
     by_id = {offer.id: offer for offer in offers}
     for placement in result.placements:
         offer = by_id.get(placement.offer_id)

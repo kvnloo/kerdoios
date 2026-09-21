@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+import time
+from dataclasses import replace
+from typing import Any, Mapping
 
+from ..quota import legacy_projection, quota_state_from_headers
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
 from .base import ResourceProvider
-from .http import get_json_response, quota_from_headers
+from .http import get_json_response
 
 GROQ_MODELS = "https://api.groq.com/openai/v1/models"
 CEREBRAS_MODELS = "https://api.cerebras.ai/v1/models"
@@ -103,14 +106,26 @@ def _catalog(
     concurrency: int,
     latency_ms: float,
     free_only: bool = False,
+    account_observed_ceiling: Mapping[str, float] | None = None,
+    confirmed_usage_today: Mapping[str, float] | None = None,
 ) -> list[ResourceOffer]:
     if not api_key:
         return []
     fetched = get_json_response(url, api_key=api_key)
     if not fetched:
         return []
-    remaining, reset = quota_from_headers(fetched.headers)
+    # Groq exposes only minute windows; a caller can inject the account ceiling
+    # plus confirmed usage so the day window is reconstructed, never aliased.
+    clock = time.time()
+    header_quota = quota_state_from_headers(
+        fetched.headers,
+        provider=provider,
+        now=clock,
+        account_observed_ceiling=account_observed_ceiling,
+        confirmed_usage_today=confirmed_usage_today,
+    )
     # Absent headers mean unknown remaining, not a hardcoded free-tier sticker.
+    remaining, reset = legacy_projection(header_quota, now=clock)
     free_quota = remaining if remaining is not None else 0.0
     offers: list[ResourceOffer] = []
     for item in fetched.body.get("data") or []:
@@ -135,6 +150,7 @@ def _catalog(
             output_token_price=out,
             remaining_free_quota=free_quota,
             seconds_until_quota_reset=reset,
+            quota=replace(header_quota, model=mid),
         )
         offers.append(
             ResourceOffer(
@@ -160,7 +176,13 @@ def _catalog(
     return offers
 
 
-def discover_groq(*, api_key: str | None = None, free_only: bool = False) -> list[ResourceOffer]:
+def discover_groq(
+    *,
+    api_key: str | None = None,
+    free_only: bool = False,
+    account_observed_ceiling: Mapping[str, float] | None = None,
+    confirmed_usage_today: Mapping[str, float] | None = None,
+) -> list[ResourceOffer]:
     key = api_key if api_key is not None else os.environ.get("GROQ_API_KEY")
     return _catalog(
         provider="groq",
@@ -169,10 +191,18 @@ def discover_groq(*, api_key: str | None = None, free_only: bool = False) -> lis
         concurrency=20,
         latency_ms=280.0,
         free_only=free_only,
+        account_observed_ceiling=account_observed_ceiling,
+        confirmed_usage_today=confirmed_usage_today,
     )
 
 
-def discover_cerebras(*, api_key: str | None = None, free_only: bool = False) -> list[ResourceOffer]:
+def discover_cerebras(
+    *,
+    api_key: str | None = None,
+    free_only: bool = False,
+    account_observed_ceiling: Mapping[str, float] | None = None,
+    confirmed_usage_today: Mapping[str, float] | None = None,
+) -> list[ResourceOffer]:
     key = api_key if api_key is not None else os.environ.get("CEREBRAS_API_KEY")
     return _catalog(
         provider="cerebras",
@@ -181,6 +211,8 @@ def discover_cerebras(*, api_key: str | None = None, free_only: bool = False) ->
         concurrency=20,
         latency_ms=190.0,
         free_only=free_only,
+        account_observed_ceiling=account_observed_ceiling,
+        confirmed_usage_today=confirmed_usage_today,
     )
 
 

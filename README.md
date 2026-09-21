@@ -112,6 +112,10 @@ Hermes executes. Kerdoios does not.
 
 Small springs, private waterwheels, and expensive reservoir gates are the same diagram: free quota, local inference, and paid overflow. Kerdoios allots the portion. Hermes spends it. The budget is the cut.
 
+## Local cognition placement
+
+For the local cognition SLMs (JEV / tiny specialists / orchestrator / general SLM), Kerdoios answers only the resource question: given an **already-selected** capability/role and the current machine state, can this model run locally now, which runtime/quant fits, and should it be co-resident? It does **not** decide semantic suitability — that stays in z0intelligence. Machine profiles, measured VRAM/latency, the inspectable recommendation fields, and the never-co-reside constraints are in [docs/local-cognition-placement.md](docs/local-cognition-placement.md).
+
 ## MVP claim
 
 Hermes can execute an LLM workload more cheaply than naive single-provider routing without a material drop in verified success, by splitting workers across free quota, local inference, and a paid overflow slice — subject to hard constraints (context, tools, privacy).

@@ -19,7 +19,7 @@ Homepage = "https://github.com/kvnloo/kerdoios"
 kerdoios = "kerdoios.__main__:main"
 
 [tool.setuptools]
-packages = ["kerdoios", "kerdoios.providers"]
+packages = ["kerdoios", "kerdoios.providers", "kerdoios.quota"]
 
 [tool.setuptools.package-data]
 "kerdoios.providers" = ["*.json"]
