@@ -3,6 +3,7 @@ from __future__ import annotations
 from .blend import apply_observed
 from .pareto import nondominated
 from .presets import PRESETS
+from .quota import PlanningPolicy, free_only_rejection
 from .score import ScoredOffer, capability_fit, score
 from .types import (
     ExecutionPlan,
@@ -87,10 +88,28 @@ def allocate(offers: list[ScoredOffer], req: WorkRequirement) -> tuple[list[Plac
     return placements, remaining
 
 
-def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: bool = False) -> ExecutionPlan:
+def plan(
+    offers: list[ResourceOffer],
+    req: WorkRequirement,
+    *,
+    use_observed: bool = False,
+    policy: PlanningPolicy | None = None,
+) -> ExecutionPlan:
+    posture = policy or PlanningPolicy()
     if use_observed:
         offers = apply_observed(offers, capability_id=req.capability_id)
     eligible, rejections = hard_filter(offers, req)
+    if posture.free_only:
+        # Free-only is a candidate filter, not a scoring nudge: a paid tier must
+        # never win by scoring higher once free capacity is spent.
+        kept: list[ResourceOffer] = []
+        for offer in eligible:
+            reason = free_only_rejection(offer, posture)
+            if reason:
+                rejections.append(Rejection(offer_id=offer.id, reason=reason))
+                continue
+            kept.append(offer)
+        eligible = kept
     weights = PRESETS[req.mode]
     scored = [score(offer, req, weights) for offer in eligible]
     scored = [item for item in scored if item.capability > 0]
@@ -120,6 +139,9 @@ def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: boo
         confidence = min(s.capability for s in scored if any(p.offer_id == s.offer.id for p in placements))
     fallbacks = [item.offer.id for item in sorted(scored, key=lambda s: s.fitness, reverse=True)]
     fallbacks = [fid for fid in fallbacks if fid not in {p.offer_id for p in placements}]
+    # Everything free was spent and nothing was eligible: say so explicitly so
+    # a caller cannot read the empty plan as "budget happened to be zero".
+    no_free_capacity = posture.free_only and not placements and not eligible
     return ExecutionPlan(
         estimated_cost=round(total_cost, 6),
         estimated_duration_seconds=round(duration, 3),
@@ -129,4 +151,7 @@ def plan(offers: list[ResourceOffer], req: WorkRequirement, *, use_observed: boo
         rejections=rejections,
         mode=req.mode.value,
         unplaced_workers=unplaced,
+        free_only=posture.free_only,
+        no_paid_spill=posture.no_paid_spill,
+        no_free_capacity=no_free_capacity,
     )

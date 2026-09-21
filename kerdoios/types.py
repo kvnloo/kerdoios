@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from .quota import QuotaState
 
 
 ResourceType = Literal["llm", "gpu", "cpu", "vm", "service"]
@@ -50,6 +53,9 @@ class Economics:
     remaining_credits: float = 0.0
     seconds_until_quota_reset: float | None = None
     seconds_until_credits_expire: float | None = None
+    # Dimensional quota (rpm/rpd/tpm/tpd + provenance). The scalar fields above
+    # stay for existing callers; this is the non-lossy picture.
+    quota: "QuotaState | None" = None
 
     def marginal_cost_per_token(self) -> float:
         if self.remaining_free_quota > 0 or self.remaining_credits > 0:
@@ -153,6 +159,11 @@ class ExecutionPlan:
     rejections: list[Rejection]
     mode: str
     unplaced_workers: int = 0
+    # Free-only posture actually applied to this plan, plus the explicit
+    # "everything free is spent" outcome so callers never infer paid spill.
+    free_only: bool = False
+    no_paid_spill: bool = True
+    no_free_capacity: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -164,4 +175,7 @@ class ExecutionPlan:
             "rejections": [r.to_dict() for r in self.rejections],
             "mode": self.mode,
             "unplaced_workers": self.unplaced_workers,
+            "free_only": self.free_only,
+            "no_paid_spill": self.no_paid_spill,
+            "no_free_capacity": self.no_free_capacity,
         }

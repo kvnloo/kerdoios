@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .quota import QuotaState
 from .types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
 
 CACHE_TTL = timedelta(hours=6)
@@ -52,6 +53,19 @@ def _strip_secrets(value: Any) -> Any:
     return value
 
 
+def _economics_from_dict(raw: Any) -> Economics:
+    if not isinstance(raw, dict):
+        return Economics()
+    fields = dict(raw)
+    quota_raw = fields.pop("quota", None)
+    economics = Economics(**fields)
+    if quota_raw is None:
+        return economics
+    # The cache stores the serialized form; restore the typed structure so
+    # quota-aware callers do not see a plain dict after a cache round-trip.
+    return Economics(**fields, quota=QuotaState.from_dict(quota_raw))
+
+
 def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
     try:
         caps_raw = raw.get("capabilities") or {}
@@ -60,6 +74,7 @@ def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
         tools = raw.get("tools") or ()
         privacy = raw.get("privacy_ok") or ("public", "confidential")
         model = raw.get("model")
+        economics = _economics_from_dict(raw.get("economics"))
         return ResourceOffer(
             id=str(raw["id"]),
             provider=str(raw["provider"]),
@@ -68,7 +83,7 @@ def _offer_from_dict(raw: dict[str, Any]) -> ResourceOffer | None:
             local=bool(raw.get("local")),
             capabilities=CapabilityProfile(**caps_raw),
             capacity=Capacity(**(raw.get("capacity") or {})),
-            economics=Economics(**(raw.get("economics") or {})),
+            economics=economics,
             telemetry=Telemetry(**(raw.get("telemetry") or {})),
             tools=tuple(tools),
             privacy_ok=tuple(privacy),

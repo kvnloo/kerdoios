@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from ..quota import QuotaState, legacy_projection, quota_state_from_headers
 from ..types import CapabilityProfile, Capacity, Economics, ResourceOffer, Telemetry
-from .http import get_json_response, quota_from_headers
+from .http import get_json_response
 
 OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models"
 _SNAPSHOT = Path(__file__).resolve().parent / "openrouter_free.snapshot.json"
@@ -38,6 +40,7 @@ def _offers_from_payload(
     *,
     remaining_free_quota: float | None = None,
     seconds_until_quota_reset: float | None = None,
+    quota: QuotaState | None = None,
 ) -> list[ResourceOffer]:
     offers: list[ResourceOffer] = []
     for item in payload.get("data") or []:
@@ -62,6 +65,7 @@ def _offers_from_payload(
         # Paid rows must not inherit rate-limit remaining; that field would mark them free.
         row_quota = remaining_free_quota if free and remaining_free_quota is not None else 0.0
         row_reset = seconds_until_quota_reset if free and remaining_free_quota is not None else None
+        row_dimensions = replace(quota, model=mid) if free and quota is not None else None
         offers.append(
             ResourceOffer(
                 id=offer_id,
@@ -84,6 +88,7 @@ def _offers_from_payload(
                     output_token_price=out,
                     remaining_free_quota=row_quota,
                     seconds_until_quota_reset=row_reset,
+                    quota=row_dimensions,
                 ),
                 telemetry=Telemetry(latency_p50_ms=900.0 if free else 600.0),
                 tools=("*",) if has_tools else (),
@@ -101,12 +106,18 @@ def discover(*, api_key: str | None = None) -> list[ResourceOffer]:
         return []
     remaining = None
     reset = None
+    quota = None
     if key:
-        remaining, reset = quota_from_headers(fetched.headers)
+        clock = time.time()
+        quota = quota_state_from_headers(
+            fetched.headers, provider="openrouter", model="", now=clock
+        )
+        remaining, reset = legacy_projection(quota, now=clock)
     return _offers_from_payload(
         fetched.body,
         remaining_free_quota=remaining,
         seconds_until_quota_reset=reset,
+        quota=quota,
     )
 
 
