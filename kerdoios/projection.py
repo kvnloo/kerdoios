@@ -102,9 +102,18 @@ ROLES = (
 
 
 class EvidenceClass(str, Enum):
+    """Evidence classes, in strength order.
+
+    This mirrors the canonical taxonomy in `kvnloo/z0` `registry/maturity.yaml`
+    (`REQUIRED_EVIDENCE_CLASSES`), which is the one definition. `PAIRED_REPLAY`
+    was missing here while the registry required it, so a paired-replay claim
+    could not be expressed at all.
+    """
+
     SMOKE = "SMOKE"
     EXPLORATORY_BETA = "EXPLORATORY_BETA"
     SHADOW = "SHADOW"
+    PAIRED_REPLAY = "PAIRED_REPLAY"
     CONFIRM = "CONFIRM"
     OOD = "OOD"
     PROMOTION = "PROMOTION"
@@ -482,6 +491,14 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 Trust.TRUSTED_BOUNDED.value if (ev.unsafe == 0 and (ev.success or 0) >= 0.8)
                 else Trust.QUARANTINED.value
             )
+        elif ec == EvidenceClass.PAIRED_REPLAY.value:
+            # Paired replay establishes a COMPARISON, not a capability. The
+            # canonical taxonomy forbids it from influencing the trust record,
+            # so it is recorded as tested-and-experimental and no trust is
+            # granted even when the numbers look strong.
+            target.trust[role] = (
+                Trust.QUARANTINED.value if ev.unsafe else Trust.TESTED_EXPERIMENTAL.value
+            )
         elif ec in (EvidenceClass.SHADOW.value, EvidenceClass.EXPLORATORY_BETA.value, EvidenceClass.SMOKE.value):
             if ev.unsafe:
                 # an unsafe exploratory result is quarantined immediately
@@ -490,6 +507,15 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 target.trust[role] = Trust.TRUSTED_SHADOW.value
             else:
                 target.trust[role] = Trust.TESTED_EXPERIMENTAL.value
+        else:
+            # No silent fallthrough. Before this, an unrecognised class skipped
+            # every branch: the row was still marked TESTED while receiving no
+            # trust at all, which is the worst of both -- it looks evaluated and
+            # carries no verdict.
+            raise ValueError(
+                f"unknown evidence_class {ec!r}; the canonical taxonomy is "
+                "defined in kvnloo/z0 registry/maturity.yaml (evidence:)"
+            )
         target.status = Status.TESTED.value
 
 
