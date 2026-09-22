@@ -415,6 +415,27 @@ def k8s_rows(kubeconfig: str | None = None) -> list[RuntimeEntry]:
     return rows
 
 
+def _canonical_evidence_class(value: Any) -> str:
+    """Canonical (uppercase) evidence class, or the exploratory-beta default.
+
+    Absent means exploratory beta, which is the ceiling for anything that did not
+    say what it was. Present-but-unknown is an error, not a default -- silently
+    downgrading an unrecognised class is how a class the code does not know ends
+    up looking evaluated while carrying no verdict.
+    """
+    if value is None or str(value).strip() == "":
+        return EvidenceClass.EXPLORATORY_BETA.value
+    text = str(value).strip().upper()
+    by_name = {c.value: c.value for c in EvidenceClass}
+    if text not in by_name:
+        raise ValueError(
+            f"unknown evidence_class {value!r}; the canonical taxonomy is "
+            f"{', '.join(c.value for c in EvidenceClass)} "
+            "(kvnloo/z0 registry/maturity.yaml, evidence:)"
+        )
+    return by_name[text]
+
+
 # ------------------------------------------------------------- evidence import
 
 
@@ -449,7 +470,12 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
             by_model[model.lower()] = target
 
         role = str(doc.get("role") or "bounded_choice")
-        ec = str(doc.get("evidence_class") or EvidenceClass.EXPLORATORY_BETA.value)
+        # Artifacts serialize the class lowercased; the taxonomy is uppercase.
+        # Comparing the raw string meant this rejected EVERY artifact it was
+        # handed -- 17 of them in this ecosystem -- because `exploratory_beta`
+        # is not `EXPLORATORY_BETA`. Normalize, then match. The set is unchanged:
+        # an unknown name still raises below.
+        ec = _canonical_evidence_class(doc.get("evidence_class"))
         ev = RoleEvidence(
             n=int(doc.get("n") or 0),
             success=doc.get("success"),

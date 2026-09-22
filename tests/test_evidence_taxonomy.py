@@ -92,6 +92,60 @@ class EvidenceTaxonomyTests(unittest.TestCase):
                 f"{cls.value} produced a TESTED row with no trust verdict",
             )
 
+    def test_lowercase_serialized_class_is_accepted(self) -> None:
+        """The defect this normalization exists for.
+
+        Every artifact in this ecosystem serializes the class lowercased --
+        `"evidence_class": "exploratory_beta"` -- and the consumer matched uppercase
+        literals exactly, so it rejected all of them::
+
+            ValueError: unknown evidence_class 'exploratory_beta'
+
+        The class set is unchanged; only the case is normalized. An artifact that
+        genuinely names an unknown class still raises.
+        """
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="exploratory_beta")])
+        self.assertEqual(entries[0].status, Status.TESTED.value)
+        self.assertEqual(entries[0].trust["bounded_choice"], Trust.TESTED_EXPERIMENTAL.value)
+
+    def test_lowercase_confirm_also_promotes(self) -> None:
+        """Normalization must not be a one-way downgrade.
+
+        Accepting the lowercase spelling only for weak classes would be worse
+        than rejecting it: a lowercase CONFIRM artifact would look ingested and
+        silently never promote.
+        """
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="confirm")])
+        self.assertEqual(entries[0].trust["bounded_choice"], Trust.TRUSTED_BOUNDED.value)
+
+    def test_every_class_is_accepted_in_both_spellings(self) -> None:
+        for cls in EvidenceClass:
+            for spelling in (cls.value, cls.value.lower()):
+                entries: list = []
+                apply_evidence(entries, [_doc(evidence_class=spelling)])
+                self.assertIn(
+                    "bounded_choice", entries[0].trust,
+                    f"{spelling!r} produced no trust verdict",
+                )
+
+    def test_whitespace_is_not_a_third_spelling(self) -> None:
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="  SHADOW  ")])
+        self.assertEqual(entries[0].trust["bounded_choice"], Trust.TRUSTED_SHADOW.value)
+
+    def test_corpus_is_not_an_evidence_class(self) -> None:
+        """A corpus is a dataset, not a claim about a capability.
+
+        evolution-lab stamped a corpus manifest with
+        `"evidence_class": "corpus"`. It must not be waved through as a weak
+        class, because the ladder would then rank a dataset against CONFIRM.
+        """
+        with self.assertRaises(ValueError) as ctx:
+            apply_evidence([], [_doc(evidence_class="corpus")])
+        self.assertIn("corpus", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
