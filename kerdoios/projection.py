@@ -182,11 +182,16 @@ def _location_of(offer: ResourceOffer) -> str:
 def _backend_of(offer: ResourceOffer) -> str:
     prov = offer.provider.lower()
     src = (offer.source or "").lower()
-    if prov == "groq":
+    # Match on `source` as well as `provider`. Rows arrive from provider
+    # catalogs whose `provider` field is a vendor name while the transport is
+    # recorded only in `source` (e.g. source="openrouter:/api/v1/models").
+    # Checking only `provider` let those rows fall through to the old PI_AI
+    # catch-all, which labelled 441 OpenRouter rows as `pi-ai`.
+    if prov == "groq" or "groq" in src:
         return ExecutionBackend.GROQ.value
-    if prov == "cerebras":
+    if prov == "cerebras" or "cerebras" in src:
         return ExecutionBackend.CEREBRAS.value
-    if prov == "openrouter":
+    if prov == "openrouter" or "openrouter" in src:
         return ExecutionBackend.OPENROUTER.value
     if "z0int" in src or "nanojev" in prov:
         return ExecutionBackend.LLAMA_CPP.value
@@ -196,15 +201,28 @@ def _backend_of(offer: ResourceOffer) -> str:
         return ExecutionBackend.LLAMA_CPP.value
     if offer.local:
         return ExecutionBackend.LLAMA_CPP.value
-    return ExecutionBackend.PI_AI.value
+    # An unrecognised *remote* transport is unknown, not pi-ai. Same rule as
+    # residency: never assert a runtime we have not actually identified.
+    return ExecutionBackend.UNKNOWN.value
 
 
 def _status_of(offer: ResourceOffer) -> str:
-    if offer.confidence <= 0.1:
-        return Status.DISCOVERED.value
+    """Status of a row that came from a catalog, not from a live probe.
+
+    Catalog rows are *listed*: we know the provider advertises the offer, and we
+    know nothing about whether it can serve right now. Returning RUNNABLE here
+    turned a confidence float into an availability claim -- the inventory
+    reported 458 rows runnable with no probe behind any of them, including
+    offers that do not exist.
+
+    So this returns DISCOVERED for anything not positively known to be broken.
+    Rows that ARE observed get their status from the observation instead:
+    live `/health` probes stamp RUNNABLE at the call site, and folded evidence
+    promotes to TESTED in `apply_evidence`. Availability is never inferred here.
+    """
     if offer.telemetry.failure_rate >= 0.5:
         return Status.BROKEN.value
-    return Status.RUNNABLE.value
+    return Status.DISCOVERED.value
 
 
 def from_offer(offer: ResourceOffer) -> RuntimeEntry:
@@ -364,6 +382,25 @@ def k8s_rows(kubeconfig: str | None = None) -> list[RuntimeEntry]:
     for node in data.get("items") or []:
         name = node["metadata"]["name"]
         alloc = node.get("status", {}).get("allocatable", {})
+        # Availability is observed, not assumed. Every node used to be stamped
+        # RUNNABLE unconditionally, so a NotReady or cordoned node advertised
+        # itself as capacity. Read the Ready condition instead.
+        conditions = {
+            str(c.get("type")): c for c in (node.get("status", {}).get("conditions") or [])
+        }
+        ready_condition = conditions.get("Ready") or {}
+        is_ready = str(ready_condition.get("status")) == "True"
+        unschedulable = bool(node.get("spec", {}).get("unschedulable"))
+        if is_ready and not unschedulable:
+            status = Status.RUNNABLE.value
+            note = "node Ready"
+        elif unschedulable:
+            status = Status.UNAVAILABLE.value
+            note = "node cordoned (spec.unschedulable)"
+        else:
+            reason = ready_condition.get("reason") or "Ready condition not True"
+            status = Status.UNAVAILABLE.value
+            note = f"node not Ready: {reason}"
         rows.append(
             RuntimeEntry(
                 id=f"k8s/node/{name}",
@@ -372,16 +409,20 @@ def k8s_rows(kubeconfig: str | None = None) -> list[RuntimeEntry]:
                 revision=node.get("status", {}).get("nodeInfo", {}).get("kubeletVersion"),
                 location=Location.LOCAL_K8S.value,
                 execution_backend=ExecutionBackend.UNKNOWN.value,
-                status=Status.RUNNABLE.value,
+                status=status,
                 capabilities={"gpu": "nvidia.com/gpu" in alloc},
                 constraints={
                     "cpu": alloc.get("cpu"),
                     "memory": alloc.get("memory"),
                     "pods": alloc.get("pods"),
                     "gpu": alloc.get("nvidia.com/gpu"),
+                    "ready": is_ready,
+                    "unschedulable": unschedulable,
                 },
                 local=True,
-                notes="kind node; GPU requires an allocatable nvidia.com/gpu resource",
+                notes=(
+                    f"{note}; GPU requires an allocatable nvidia.com/gpu resource"
+                ),
             )
         )
     return rows
