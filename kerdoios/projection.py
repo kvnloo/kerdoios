@@ -455,6 +455,17 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
     for doc in docs:
         model = str(doc.get("model") or "")
         prov = str(doc.get("provider") or "")
+        # Resolve the class FIRST: the status an entry gets depends on it, and
+        # computing it after the entry was created used the previous loop
+        # iteration's value.
+        #
+        # Artifacts serialize the class lowercased; the taxonomy is uppercase.
+        # Comparing the raw string meant this rejected EVERY artifact it was
+        # handed -- 17 of them in this ecosystem -- because `exploratory_beta`
+        # is not `EXPLORATORY_BETA`. Normalize, then match. The set is unchanged:
+        # an unknown name still raises below.
+        ec = _canonical_evidence_class(doc.get("evidence_class"))
+        role = str(doc.get("role") or "bounded_choice")
         target = by_model.get(model.lower()) or by_model.get(f"{prov}/{model}".lower())
         if target is None:
             target = RuntimeEntry(
@@ -463,19 +474,16 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 execution_backend=(ExecutionBackend.GROQ.value if prov == "groq"
                                    else ExecutionBackend.CEREBRAS.value if prov == "cerebras"
                                    else ExecutionBackend.UNKNOWN.value),
-                status=Status.TESTED.value, local=False,
+                # A smoke test proves wiring, not that a capability was
+                # measured, so an entry it mentions was DISCOVERED at most.
+                status=(Status.DISCOVERED.value if ec == EvidenceClass.SMOKE.value
+                        else Status.TESTED.value),
+                local=False,
                 notes="added from experiment evidence",
             )
             entries.append(target)
             by_model[model.lower()] = target
 
-        role = str(doc.get("role") or "bounded_choice")
-        # Artifacts serialize the class lowercased; the taxonomy is uppercase.
-        # Comparing the raw string meant this rejected EVERY artifact it was
-        # handed -- 17 of them in this ecosystem -- because `exploratory_beta`
-        # is not `EXPLORATORY_BETA`. Normalize, then match. The set is unchanged:
-        # an unknown name still raises below.
-        ec = _canonical_evidence_class(doc.get("evidence_class"))
         ev = RoleEvidence(
             n=int(doc.get("n") or 0),
             success=doc.get("success"),
@@ -503,7 +511,17 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
             target.trust[role] = (
                 Trust.QUARANTINED.value if ev.unsafe else Trust.TESTED_EXPERIMENTAL.value
             )
-        elif ec in (EvidenceClass.SHADOW.value, EvidenceClass.EXPLORATORY_BETA.value, EvidenceClass.SMOKE.value):
+        elif ec == EvidenceClass.SMOKE.value:
+            # The taxonomy gives SMOKE `may_influence: []`: it "proves wiring and
+            # nothing else". This branch used to fall through with the others and
+            # write TESTED_EXPERIMENTAL, which is a claim the capability was
+            # measured -- exactly what a wiring check cannot support. A
+            # RESTRICTION is still allowed here, because refusing on weak
+            # evidence is the safe direction.
+            target.trust[role] = (
+                Trust.QUARANTINED.value if ev.unsafe else Trust.UNTESTED.value
+            )
+        elif ec in (EvidenceClass.SHADOW.value, EvidenceClass.EXPLORATORY_BETA.value):
             if ev.unsafe:
                 # an unsafe exploratory result is quarantined immediately
                 target.trust[role] = Trust.QUARANTINED.value
@@ -520,7 +538,12 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 f"unknown evidence_class {ec!r}; the canonical taxonomy is "
                 "defined in kvnloo/z0 registry/maturity.yaml (evidence:)"
             )
-        target.status = Status.TESTED.value
+        # The row is marked TESTED only where the class licenses it. Setting it
+        # unconditionally here silently overrode the per-class status chosen
+        # above, so a SMOKE doc still produced a `tested` row: the taxonomy gives
+        # SMOKE `may_influence: []` because it proves wiring, not capability.
+        if ec != EvidenceClass.SMOKE.value:
+            target.status = Status.TESTED.value
 
 
 # ------------------------------------------------------------------- assembly

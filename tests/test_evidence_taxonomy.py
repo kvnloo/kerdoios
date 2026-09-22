@@ -81,16 +81,50 @@ class EvidenceTaxonomyTests(unittest.TestCase):
         self.assertIn("TOTALLY_MADE_UP", str(ctx.exception))
         self.assertIn("maturity.yaml", str(ctx.exception))
 
-    def test_every_row_that_is_marked_tested_carries_a_trust_verdict(self) -> None:
-        """The silent-fallthrough property: tested rows must have a verdict."""
+    def test_every_class_produces_a_verdict_and_only_licensed_classes_are_tested(self) -> None:
+        """Two properties at once, because they interact.
+
+        The original defect was a silent fallthrough: an unrecognised class
+        skipped every branch, so the row was stamped `tested` while carrying no
+        verdict at all. Every class must therefore leave a verdict.
+
+        The second half is the SMOKE ceiling. The taxonomy gives SMOKE
+        `may_influence: []` -- it proves wiring and nothing else -- so SMOKE is
+        the one class that may not leave a row looking tested. This test used to
+        assert `tested` for every class including SMOKE, which is how the
+        over-claim was locked in.
+        """
         for cls in EvidenceClass:
             entries: list = []
             apply_evidence(entries, [_doc(evidence_class=cls.value)])
-            self.assertEqual(entries[0].status, Status.TESTED.value)
             self.assertIn(
                 "bounded_choice", entries[0].trust,
-                f"{cls.value} produced a TESTED row with no trust verdict",
+                f"{cls.value} produced a row with no trust verdict",
             )
+            if cls is EvidenceClass.SMOKE:
+                self.assertEqual(entries[0].status, Status.DISCOVERED.value)
+                self.assertEqual(entries[0].trust["bounded_choice"], Trust.UNTESTED.value)
+            else:
+                self.assertEqual(entries[0].status, Status.TESTED.value)
+
+    def test_smoke_may_restrict_but_may_not_claim(self) -> None:
+        """A restriction is allowed on the weakest evidence; a grant is not.
+
+        Quarantining because a smoke test produced an unsafe result is the safe
+        direction and must survive. What must not survive is SMOKE raising a
+        capability to anything that reads as evaluated-and-fine.
+        """
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="SMOKE", unsafe=3)])
+        self.assertEqual(entries[0].trust["bounded_choice"], Trust.QUARANTINED.value)
+
+    def test_smoke_cannot_reach_a_production_trust_status(self) -> None:
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="SMOKE")])
+        self.assertNotIn(
+            entries[0].trust["bounded_choice"],
+            {Trust.TRUSTED_BOUNDED.value, Trust.TRUSTED_SHADOW.value, Trust.TRUSTED_GENERAL.value},
+        )
 
     def test_lowercase_serialized_class_is_accepted(self) -> None:
         """The defect this normalization exists for.
