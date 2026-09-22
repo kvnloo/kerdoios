@@ -65,6 +65,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     inv_p.add_argument("--refresh", action="store_true", help="Bypass inventory cache and fetch live OpenRouter")
 
+    rt_p = sub.add_parser(
+        "runtime",
+        help="Runtime inventory projection: typed trust per role, evidence, location, backend",
+    )
+    rt_p.add_argument("--live", action="store_true", default=True)
+    rt_p.add_argument("--no-fixture", action="store_true", default=True)
+    rt_p.add_argument("--k8s", action="store_true", help="Include Kubernetes capacity as offers")
+    rt_p.add_argument("--gguf-dir", default="/mnt/zer0models/zer0-models/gguf")
+    rt_p.add_argument("--evidence", action="append", default=None,
+                      help="JSON evidence document to fold into typed trust (repeatable)")
+    rt_p.add_argument("--summary", action="store_true", help="Counts and trust map only")
+
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
@@ -150,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     requirement = None
-    if ns.command != "inventory":
+    if ns.command not in ("inventory", "runtime"):
         try:
             requirement = _req(ns)
         except AodlIngestError as exc:
@@ -176,6 +188,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     if ns.command == "inventory":
         print(json.dumps([_inventory_row(o) for o in offers], indent=2))
+        return 0
+    if ns.command == "runtime":
+        import json as _json
+
+        from . import projection
+
+        docs = []
+        for path in ns.evidence or []:
+            docs.extend(_json.load(open(path)))
+        entries = projection.build(
+            offers,
+            include_k8s=ns.k8s,
+            evidence_docs=docs,
+            gguf_dir=ns.gguf_dir,
+        )
+        s = projection.summary(entries)
+        print(_json.dumps(s if ns.summary else s, indent=2))
         return 0
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
     if ns.command == "explain":
