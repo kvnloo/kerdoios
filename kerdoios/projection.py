@@ -439,6 +439,26 @@ def _canonical_evidence_class(value: Any) -> str:
 # ------------------------------------------------------------- evidence import
 
 
+#: Which production tier each promoting evidence class establishes. Mirrors the
+#: `may_influence` effects declared in kvnloo/z0 registry/maturity.yaml.
+PRODUCTION_TIER_FOR: dict[str, str] = {
+    EvidenceClass.CONFIRM.value: Trust.TRUSTED_BOUNDED.value,
+    EvidenceClass.OOD.value: Trust.TRUSTED_GENERAL.value,
+}
+
+#: Classes that may leave a row marked `tested`. The rest either measure nothing
+#: (SMOKE proves wiring) or change routing without measuring (PROMOTION).
+MEASURING_CLASSES: frozenset[str] = frozenset(
+    {EvidenceClass.EXPLORATORY_BETA.value, EvidenceClass.SHADOW.value,
+     EvidenceClass.PAIRED_REPLAY.value} | set(PRODUCTION_TIER_FOR)
+)
+
+
+def _may_mark_tested(evidence_class: str) -> bool:
+    """Whether this class licenses `tested_observation` (or a trust record)."""
+    return evidence_class in MEASURING_CLASSES
+
+
 def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
     """Fold exploratory-beta experiment output into typed trust.
 
@@ -474,10 +494,11 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 execution_backend=(ExecutionBackend.GROQ.value if prov == "groq"
                                    else ExecutionBackend.CEREBRAS.value if prov == "cerebras"
                                    else ExecutionBackend.UNKNOWN.value),
-                # A smoke test proves wiring, not that a capability was
-                # measured, so an entry it mentions was DISCOVERED at most.
-                status=(Status.DISCOVERED.value if ec == EvidenceClass.SMOKE.value
-                        else Status.TESTED.value),
+                # A smoke test proves wiring and a promotion changes routing;
+                # neither measures the capability, so an entry either mentions
+                # was DISCOVERED at most.
+                status=(Status.TESTED.value if _may_mark_tested(ec)
+                        else Status.DISCOVERED.value),
                 local=False,
                 notes="added from experiment evidence",
             )
@@ -498,11 +519,31 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
         target.evidence[role] = ev
 
         # Typed trust follows the evidence class, not the success number.
-        if ec in promotable:
+        #
+        # The tier is DERIVED from the effects the class is allowed to influence
+        # in kvnloo/z0 registry/maturity.yaml (evidence: -> may_influence):
+        #
+        #   CONFIRM   capability_trust_record -> TRUSTED_BOUNDED  (within the measured distribution)
+        #   OOD       general_trust_record    -> TRUSTED_GENERAL  (beyond it; this is the
+        #                                                          class for generality claims)
+        #   SHADOW    shadow_trust_record     -> TRUSTED_SHADOW   (observation paths only)
+        #
+        # A class that may NOT influence a trust record gets none, however strong
+        # it is. PROMOTION is the case in point: its declared influence is
+        # `default_routing` and `install_profile_membership`, and the taxonomy
+        # says it "consumes CONFIRM and OOD evidence; it does not substitute for
+        # it". A promotion artifact alone therefore establishes no capability
+        # trust, and this branch used to grant TRUSTED_BOUNDED from one.
+        if ec in (EvidenceClass.CONFIRM.value, EvidenceClass.OOD.value):
             target.trust[role] = (
-                Trust.TRUSTED_BOUNDED.value if (ev.unsafe == 0 and (ev.success or 0) >= 0.8)
+                PRODUCTION_TIER_FOR[ec] if (ev.unsafe == 0 and (ev.success or 0) >= 0.8)
                 else Trust.QUARANTINED.value
             )
+        elif ec == EvidenceClass.PROMOTION.value:
+            # Verified as dormant in this ecosystem (no producer emits a
+            # promotion-class evidence document), but the code now matches the
+            # contract rather than contradicting it.
+            target.trust.pop(role, None)
         elif ec == EvidenceClass.PAIRED_REPLAY.value:
             # Paired replay establishes a COMPARISON, not a capability. The
             # canonical taxonomy forbids it from influencing the trust record,
@@ -542,7 +583,11 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
         # unconditionally here silently overrode the per-class status chosen
         # above, so a SMOKE doc still produced a `tested` row: the taxonomy gives
         # SMOKE `may_influence: []` because it proves wiring, not capability.
-        if ec != EvidenceClass.SMOKE.value:
+        # A row is TESTED only where the class licenses `tested_observation` (or
+        # establishes a trust record, which presupposes a measurement). SMOKE
+        # proves wiring and PROMOTION changes routing; neither measures the
+        # capability, so neither may leave a row looking evaluated.
+        if _may_mark_tested(ec):
             target.status = Status.TESTED.value
 
 

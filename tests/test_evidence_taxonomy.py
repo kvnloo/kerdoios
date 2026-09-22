@@ -81,31 +81,64 @@ class EvidenceTaxonomyTests(unittest.TestCase):
         self.assertIn("TOTALLY_MADE_UP", str(ctx.exception))
         self.assertIn("maturity.yaml", str(ctx.exception))
 
-    def test_every_class_produces_a_verdict_and_only_licensed_classes_are_tested(self) -> None:
-        """Two properties at once, because they interact.
+    def test_trust_is_granted_only_by_classes_the_taxonomy_allows(self) -> None:
+        """The tier is derived from declared effects, not asserted per class.
 
-        The original defect was a silent fallthrough: an unrecognised class
-        skipped every branch, so the row was stamped `tested` while carrying no
-        verdict at all. Every class must therefore leave a verdict.
+        This test has now been wrong twice in the same direction, which is why it
+        is written as an explicit table. It first asserted `tested` for every
+        class including SMOKE, locking in an over-claim. It then asserted a
+        verdict for every class, which locked in PROMOTION granting
+        TRUSTED_BOUNDED -- a class whose declared influence is `default_routing`
+        and `install_profile_membership`, and which the taxonomy says "consumes
+        CONFIRM and OOD evidence; it does not substitute for it".
 
-        The second half is the SMOKE ceiling. The taxonomy gives SMOKE
-        `may_influence: []` -- it proves wiring and nothing else -- so SMOKE is
-        the one class that may not leave a row looking tested. This test used to
-        assert `tested` for every class including SMOKE, which is how the
-        over-claim was locked in.
+        A class grants a verdict only where it may influence a trust record:
+
+          SMOKE            may_influence: []                  -> no verdict, not tested
+          EXPLORATORY_BETA tested_observation                 -> TESTED_EXPERIMENTAL
+          SHADOW           shadow_trust_record                -> TRUSTED_SHADOW
+          PAIRED_REPLAY    tested_observation                 -> TESTED_EXPERIMENTAL
+          CONFIRM          capability_trust_record            -> TRUSTED_BOUNDED
+          OOD              general_trust_record               -> TRUSTED_GENERAL
+          PROMOTION        default_routing only               -> no verdict, not tested
         """
-        for cls in EvidenceClass:
+        expected = {
+            EvidenceClass.SMOKE.value: (Status.DISCOVERED.value, Trust.UNTESTED.value),
+            EvidenceClass.EXPLORATORY_BETA.value: (Status.TESTED.value, Trust.TESTED_EXPERIMENTAL.value),
+            EvidenceClass.SHADOW.value: (Status.TESTED.value, Trust.TRUSTED_SHADOW.value),
+            EvidenceClass.PAIRED_REPLAY.value: (Status.TESTED.value, Trust.TESTED_EXPERIMENTAL.value),
+            EvidenceClass.CONFIRM.value: (Status.TESTED.value, Trust.TRUSTED_BOUNDED.value),
+            EvidenceClass.OOD.value: (Status.TESTED.value, Trust.TRUSTED_GENERAL.value),
+            EvidenceClass.PROMOTION.value: (Status.DISCOVERED.value, None),
+        }
+        self.assertEqual(set(expected), {c.value for c in EvidenceClass},
+                         "every class must be listed, so a new one cannot slip through")
+        for cls, (want_status, want_trust) in expected.items():
             entries: list = []
-            apply_evidence(entries, [_doc(evidence_class=cls.value)])
-            self.assertIn(
-                "bounded_choice", entries[0].trust,
-                f"{cls.value} produced a row with no trust verdict",
-            )
-            if cls is EvidenceClass.SMOKE:
-                self.assertEqual(entries[0].status, Status.DISCOVERED.value)
-                self.assertEqual(entries[0].trust["bounded_choice"], Trust.UNTESTED.value)
-            else:
-                self.assertEqual(entries[0].status, Status.TESTED.value)
+            apply_evidence(entries, [_doc(evidence_class=cls)])
+            self.assertEqual(entries[0].status, want_status, f"{cls}: status")
+            self.assertEqual(entries[0].trust.get("bounded_choice"), want_trust, f"{cls}: trust")
+
+    def test_ood_establishes_general_trust_not_bounded(self) -> None:
+        """OOD is the generality class, so it is the general tier it establishes.
+
+        `TRUSTED_GENERAL` was declared in this repo and unreachable: the ladder
+        granted `TRUSTED_BOUNDED` to OOD, so nothing could ever produce the
+        general tier.
+        """
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="OOD")])
+        self.assertEqual(entries[0].trust["bounded_choice"], Trust.TRUSTED_GENERAL.value)
+        self.assertNotEqual(entries[0].trust["bounded_choice"], Trust.TRUSTED_BOUNDED.value)
+
+    def test_promotion_alone_grants_no_trust(self) -> None:
+        """A promotion consumes CONFIRM and OOD evidence; it does not substitute."""
+        entries: list = []
+        apply_evidence(entries, [_doc(evidence_class="PROMOTION")])
+        self.assertNotIn("bounded_choice", entries[0].trust)
+        self.assertEqual(entries[0].status, Status.DISCOVERED.value)
+        # ...but it is still recorded as evidence, and does not raise.
+        self.assertIn("bounded_choice", entries[0].evidence)
 
     def test_smoke_may_restrict_but_may_not_claim(self) -> None:
         """A restriction is allowed on the weakest evidence; a grant is not.
@@ -155,13 +188,14 @@ class EvidenceTaxonomyTests(unittest.TestCase):
         self.assertEqual(entries[0].trust["bounded_choice"], Trust.TRUSTED_BOUNDED.value)
 
     def test_every_class_is_accepted_in_both_spellings(self) -> None:
+        """Accepted, not necessarily granted: PROMOTION is accepted and grants nothing."""
         for cls in EvidenceClass:
             for spelling in (cls.value, cls.value.lower()):
                 entries: list = []
                 apply_evidence(entries, [_doc(evidence_class=spelling)])
                 self.assertIn(
-                    "bounded_choice", entries[0].trust,
-                    f"{spelling!r} produced no trust verdict",
+                    "bounded_choice", entries[0].evidence,
+                    f"{spelling!r} was not recorded as evidence",
                 )
 
     def test_whitespace_is_not_a_third_spelling(self) -> None:
