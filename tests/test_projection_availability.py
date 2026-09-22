@@ -51,13 +51,12 @@ def _node(name: str, *, ready: bool | None, unschedulable: bool = False, gpu: bo
 
 class K8sNodeAvailabilityTests(unittest.TestCase):
     def _rows(self, nodes: list[dict]):
-        payload = json.dumps({"items": nodes}).encode()
+        # The cluster is discovered by providers.kubernetes; k8s_rows only
+        # shapes those offers. Mocking the provider seam (not subprocess) is
+        # what proves there is a single kubectl path.
+        from kerdoios.providers import kubernetes as k8s_provider
 
-        class _Proc:
-            returncode = 0
-            stdout = payload.decode()
-
-        with mock.patch("subprocess.run", return_value=_Proc()):
+        with mock.patch.object(k8s_provider, "_kubectl_json", return_value={"items": nodes}):
             return k8s_rows()
 
     def test_ready_node_is_runnable(self) -> None:

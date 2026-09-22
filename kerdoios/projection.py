@@ -371,67 +371,45 @@ def ollama_rows(base_url: str = "http://127.0.0.1:11434") -> list[RuntimeEntry]:
 
 
 def k8s_rows(kubeconfig: str | None = None) -> list[RuntimeEntry]:
-    """Kubernetes capacity as ordinary offers, not a special parallel universe."""
-    import subprocess
+    """Kubernetes capacity, shaped for the runtime-inventory view.
 
-    env = dict(os.environ)
-    if kubeconfig:
-        env["KUBECONFIG"] = kubeconfig
-    try:
-        proc = subprocess.run(
-            ["kubectl", "get", "nodes", "-o", "json"],
-            capture_output=True, text=True, timeout=10, env=env,
-        )
-        if proc.returncode != 0:
-            return []
-        data = json.loads(proc.stdout)
-    except Exception:
-        return []
+    The cluster is discovered by `providers.kubernetes` -- the same provider
+    placement consumes -- so there is ONE kubectl path and ONE readiness rule in
+    the codebase. Previously this function ran its own kubectl call and its own
+    (unconditional) availability logic, which is how a NotReady node came to be
+    reported as capacity.
+
+    Readiness is read off the offer's observed telemetry and `source`; nothing
+    here re-derives it.
+    """
+    from .providers import kubernetes as k8s_provider
+
     rows: list[RuntimeEntry] = []
-    for node in data.get("items") or []:
-        name = node["metadata"]["name"]
-        alloc = node.get("status", {}).get("allocatable", {})
-        # Availability is observed, not assumed. Every node used to be stamped
-        # RUNNABLE unconditionally, so a NotReady or cordoned node advertised
-        # itself as capacity. Read the Ready condition instead.
-        conditions = {
-            str(c.get("type")): c for c in (node.get("status", {}).get("conditions") or [])
-        }
-        ready_condition = conditions.get("Ready") or {}
-        is_ready = str(ready_condition.get("status")) == "True"
-        unschedulable = bool(node.get("spec", {}).get("unschedulable"))
-        if is_ready and not unschedulable:
-            status = Status.RUNNABLE.value
-            note = "node Ready"
-        elif unschedulable:
-            status = Status.UNAVAILABLE.value
-            note = "node cordoned (spec.unschedulable)"
-        else:
-            reason = ready_condition.get("reason") or "Ready condition not True"
-            status = Status.UNAVAILABLE.value
-            note = f"node not Ready: {reason}"
+    for offer in k8s_provider.discover(kubeconfig=kubeconfig, force=True):
+        usable = offer.telemetry.availability > 0.0
+        reason = offer.source.split("k8s:node-readiness:", 1)[-1]
+        node = offer.id.rsplit("/", 1)[-1]
         rows.append(
             RuntimeEntry(
-                id=f"k8s/node/{name}",
-                provider="kubernetes",
-                model=name,
-                revision=node.get("status", {}).get("nodeInfo", {}).get("kubeletVersion"),
+                id=offer.id,
+                provider=offer.provider,
+                # The inventory view labels a node row by its name. The OFFER
+                # keeps model=None, because a node is not a model; that
+                # distinction belongs at the contract, not in a display label.
+                model=node,
                 location=Location.LOCAL_K8S.value,
                 execution_backend=ExecutionBackend.UNKNOWN.value,
-                status=status,
-                capabilities={"gpu": "nvidia.com/gpu" in alloc},
+                status=Status.RUNNABLE.value if usable else Status.UNAVAILABLE.value,
+                capabilities={"gpu": offer.resource_type == "gpu"},
                 constraints={
-                    "cpu": alloc.get("cpu"),
-                    "memory": alloc.get("memory"),
-                    "pods": alloc.get("pods"),
-                    "gpu": alloc.get("nvidia.com/gpu"),
-                    "ready": is_ready,
-                    "unschedulable": unschedulable,
+                    "cpu_cores": offer.capacity.cpu_cores,
+                    "ram_gb": offer.capacity.ram_gb,
+                    "pods": offer.capacity.concurrency,
+                    "vram_gb": offer.capacity.vram_gb,
+                    "ready": usable,
                 },
                 local=True,
-                notes=(
-                    f"{note}; GPU requires an allocatable nvidia.com/gpu resource"
-                ),
+                notes=f"{reason}; GPU requires an allocatable nvidia.com/gpu resource",
             )
         )
     return rows
