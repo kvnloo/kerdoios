@@ -1,3 +1,8 @@
+---
+name: dr-eggbot
+description: Use when asked to design a skill, bot, or routine to the poteto-mode bar. Pointer to the portable dr-eggbot job; the Grok marketplace bot is not copied here.
+---
+
 # Dr eggbot
 
 Design **one** skill, bot, or routine. Do not copy the Grok marketplace bot. Dr Eggbot (Lauren Tan) is a Grok Bot that authors other bots to the poteto-mode bar. This file is the portable job for any harness.

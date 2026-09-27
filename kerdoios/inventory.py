@@ -8,7 +8,7 @@ Keyed Groq/Cerebras free-tier overlays the OpenRouter seed when those keys exist
 from __future__ import annotations
 
 from .cache import load_inventory_cache, save_inventory_cache
-from .providers import local, openrouter
+from .providers import kubernetes, local, openrouter
 from .providers.fixture import fixture_offers
 from .providers.free import filter_free, is_free
 from .providers.openai_compat import discover_cerebras, discover_groq
@@ -21,6 +21,10 @@ def collect_live(*, free_only: bool = False) -> list[ResourceOffer]:
     live_rows.extend(discover_groq(free_only=free_only))
     live_rows.extend(discover_cerebras(free_only=free_only))
     live_rows.extend(local.discover())
+    # Kubernetes is one more provider on the same contract. Its discover()
+    # returns [] unless KERDOIOS_K8S is set, so the cluster is offered when it
+    # is wanted and never required.
+    live_rows.extend(kubernetes.discover())
     return live_rows
 
 

@@ -107,6 +107,20 @@ class ResourceOffer:
 
 
 @dataclass(frozen=True)
+class QuotaConstraint:
+    """One scarce-resource budget (shared across MoA members when group matches)."""
+
+    name: str
+    limit: float
+    unit: str = "requests"  # requests | tokens | usd | seconds
+    group: str | None = None  # shared group id for multi-model MoA
+    remaining: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class WorkRequirement:
     coding: float = 0.0
     reasoning: float = 0.0
@@ -125,6 +139,11 @@ class WorkRequirement:
     # Cross-repo bridge with z0int CapabilityCards (e.g. coding.delegate).
     # Optional: residual allocator only; does not invent new capability axes.
     capability_id: str | None = None
+    # Multi-constraint quotas (shared groups keep MoA from double-booking).
+    quotas: tuple[QuotaConstraint, ...] = ()
+    # Optional join policy for multi-placement plans (planner metadata only).
+    join_policy: str | None = None  # all | any | quorum
+    retry_policy: dict[str, Any] | None = None
 
 
 @dataclass
@@ -164,9 +183,15 @@ class ExecutionPlan:
     free_only: bool = False
     no_paid_spill: bool = True
     no_free_capacity: bool = False
+    # V2 planner metadata — never inference / never self-heal execution
+    retry_policy: dict[str, Any] | None = None
+    quota_reservations: list[dict[str, Any]] = field(default_factory=list)
+    join_policy: str | None = None
+    schema: str = "kerdoios.execution_plan.v2"
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema": self.schema,
             "estimated_cost": self.estimated_cost,
             "estimated_duration_seconds": self.estimated_duration_seconds,
             "confidence": self.confidence,
@@ -178,4 +203,7 @@ class ExecutionPlan:
             "free_only": self.free_only,
             "no_paid_spill": self.no_paid_spill,
             "no_free_capacity": self.no_free_capacity,
+            "retry_policy": self.retry_policy or {"max_retries": 0, "on_failure": "fallback"},
+            "quota_reservations": list(self.quota_reservations),
+            "join_policy": self.join_policy or "all",
         }

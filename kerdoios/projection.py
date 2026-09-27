@@ -102,9 +102,18 @@ ROLES = (
 
 
 class EvidenceClass(str, Enum):
+    """Evidence classes, in strength order.
+
+    This mirrors the canonical taxonomy in `kvnloo/z0` `registry/maturity.yaml`
+    (`REQUIRED_EVIDENCE_CLASSES`), which is the one definition. `PAIRED_REPLAY`
+    was missing here while the registry required it, so a paired-replay claim
+    could not be expressed at all.
+    """
+
     SMOKE = "SMOKE"
     EXPLORATORY_BETA = "EXPLORATORY_BETA"
     SHADOW = "SHADOW"
+    PAIRED_REPLAY = "PAIRED_REPLAY"
     CONFIRM = "CONFIRM"
     OOD = "OOD"
     PROMOTION = "PROMOTION"
@@ -182,11 +191,16 @@ def _location_of(offer: ResourceOffer) -> str:
 def _backend_of(offer: ResourceOffer) -> str:
     prov = offer.provider.lower()
     src = (offer.source or "").lower()
-    if prov == "groq":
+    # Match on `source` as well as `provider`. Rows arrive from provider
+    # catalogs whose `provider` field is a vendor name while the transport is
+    # recorded only in `source` (e.g. source="openrouter:/api/v1/models").
+    # Checking only `provider` let those rows fall through to the old PI_AI
+    # catch-all, which labelled 441 OpenRouter rows as `pi-ai`.
+    if prov == "groq" or "groq" in src:
         return ExecutionBackend.GROQ.value
-    if prov == "cerebras":
+    if prov == "cerebras" or "cerebras" in src:
         return ExecutionBackend.CEREBRAS.value
-    if prov == "openrouter":
+    if prov == "openrouter" or "openrouter" in src:
         return ExecutionBackend.OPENROUTER.value
     if "z0int" in src or "nanojev" in prov:
         return ExecutionBackend.LLAMA_CPP.value
@@ -196,15 +210,28 @@ def _backend_of(offer: ResourceOffer) -> str:
         return ExecutionBackend.LLAMA_CPP.value
     if offer.local:
         return ExecutionBackend.LLAMA_CPP.value
-    return ExecutionBackend.PI_AI.value
+    # An unrecognised *remote* transport is unknown, not pi-ai. Same rule as
+    # residency: never assert a runtime we have not actually identified.
+    return ExecutionBackend.UNKNOWN.value
 
 
 def _status_of(offer: ResourceOffer) -> str:
-    if offer.confidence <= 0.1:
-        return Status.DISCOVERED.value
+    """Status of a row that came from a catalog, not from a live probe.
+
+    Catalog rows are *listed*: we know the provider advertises the offer, and we
+    know nothing about whether it can serve right now. Returning RUNNABLE here
+    turned a confidence float into an availability claim -- the inventory
+    reported 458 rows runnable with no probe behind any of them, including
+    offers that do not exist.
+
+    So this returns DISCOVERED for anything not positively known to be broken.
+    Rows that ARE observed get their status from the observation instead:
+    live `/health` probes stamp RUNNABLE at the call site, and folded evidence
+    promotes to TESTED in `apply_evidence`. Availability is never inferred here.
+    """
     if offer.telemetry.failure_rate >= 0.5:
         return Status.BROKEN.value
-    return Status.RUNNABLE.value
+    return Status.DISCOVERED.value
 
 
 def from_offer(offer: ResourceOffer) -> RuntimeEntry:
@@ -344,50 +371,92 @@ def ollama_rows(base_url: str = "http://127.0.0.1:11434") -> list[RuntimeEntry]:
 
 
 def k8s_rows(kubeconfig: str | None = None) -> list[RuntimeEntry]:
-    """Kubernetes capacity as ordinary offers, not a special parallel universe."""
-    import subprocess
+    """Kubernetes capacity, shaped for the runtime-inventory view.
 
-    env = dict(os.environ)
-    if kubeconfig:
-        env["KUBECONFIG"] = kubeconfig
-    try:
-        proc = subprocess.run(
-            ["kubectl", "get", "nodes", "-o", "json"],
-            capture_output=True, text=True, timeout=10, env=env,
-        )
-        if proc.returncode != 0:
-            return []
-        data = json.loads(proc.stdout)
-    except Exception:
-        return []
+    The cluster is discovered by `providers.kubernetes` -- the same provider
+    placement consumes -- so there is ONE kubectl path and ONE readiness rule in
+    the codebase. Previously this function ran its own kubectl call and its own
+    (unconditional) availability logic, which is how a NotReady node came to be
+    reported as capacity.
+
+    Readiness is read off the offer's observed telemetry and `source`; nothing
+    here re-derives it.
+    """
+    from .providers import kubernetes as k8s_provider
+
     rows: list[RuntimeEntry] = []
-    for node in data.get("items") or []:
-        name = node["metadata"]["name"]
-        alloc = node.get("status", {}).get("allocatable", {})
+    for offer in k8s_provider.discover(kubeconfig=kubeconfig, force=True):
+        usable = offer.telemetry.availability > 0.0
+        reason = offer.source.split("k8s:node-readiness:", 1)[-1]
+        node = offer.id.rsplit("/", 1)[-1]
         rows.append(
             RuntimeEntry(
-                id=f"k8s/node/{name}",
-                provider="kubernetes",
-                model=name,
-                revision=node.get("status", {}).get("nodeInfo", {}).get("kubeletVersion"),
+                id=offer.id,
+                provider=offer.provider,
+                # The inventory view labels a node row by its name. The OFFER
+                # keeps model=None, because a node is not a model; that
+                # distinction belongs at the contract, not in a display label.
+                model=node,
                 location=Location.LOCAL_K8S.value,
                 execution_backend=ExecutionBackend.UNKNOWN.value,
-                status=Status.RUNNABLE.value,
-                capabilities={"gpu": "nvidia.com/gpu" in alloc},
+                status=Status.RUNNABLE.value if usable else Status.UNAVAILABLE.value,
+                capabilities={"gpu": offer.resource_type == "gpu"},
                 constraints={
-                    "cpu": alloc.get("cpu"),
-                    "memory": alloc.get("memory"),
-                    "pods": alloc.get("pods"),
-                    "gpu": alloc.get("nvidia.com/gpu"),
+                    "cpu_cores": offer.capacity.cpu_cores,
+                    "ram_gb": offer.capacity.ram_gb,
+                    "pods": offer.capacity.concurrency,
+                    "vram_gb": offer.capacity.vram_gb,
+                    "ready": usable,
                 },
                 local=True,
-                notes="kind node; GPU requires an allocatable nvidia.com/gpu resource",
+                notes=f"{reason}; GPU requires an allocatable nvidia.com/gpu resource",
             )
         )
     return rows
 
 
+def _canonical_evidence_class(value: Any) -> str:
+    """Canonical (uppercase) evidence class, or the exploratory-beta default.
+
+    Absent means exploratory beta, which is the ceiling for anything that did not
+    say what it was. Present-but-unknown is an error, not a default -- silently
+    downgrading an unrecognised class is how a class the code does not know ends
+    up looking evaluated while carrying no verdict.
+    """
+    if value is None or str(value).strip() == "":
+        return EvidenceClass.EXPLORATORY_BETA.value
+    text = str(value).strip().upper()
+    by_name = {c.value: c.value for c in EvidenceClass}
+    if text not in by_name:
+        raise ValueError(
+            f"unknown evidence_class {value!r}; the canonical taxonomy is "
+            f"{', '.join(c.value for c in EvidenceClass)} "
+            "(kvnloo/z0 registry/maturity.yaml, evidence:)"
+        )
+    return by_name[text]
+
+
 # ------------------------------------------------------------- evidence import
+
+
+#: Which production tier each promoting evidence class establishes. Mirrors the
+#: `may_influence` effects declared in kvnloo/z0 registry/maturity.yaml.
+PRODUCTION_TIER_FOR: dict[str, str] = {
+    EvidenceClass.CONFIRM.value: Trust.TRUSTED_BOUNDED.value,
+    EvidenceClass.OOD.value: Trust.TRUSTED_GENERAL.value,
+}
+
+#: Classes that may leave a row marked `tested`. The rest either measure nothing
+#: (SMOKE proves wiring) or change routing without measuring (PROMOTION).
+MEASURING_CLASSES: frozenset[str] = frozenset(
+    {EvidenceClass.EXPLORATORY_BETA.value, EvidenceClass.SHADOW.value,
+     EvidenceClass.PAIRED_REPLAY.value} | set(PRODUCTION_TIER_FOR)
+)
+
+
+def _may_mark_tested(evidence_class: str) -> bool:
+    """Whether this class licenses `tested_observation` (or a trust record)."""
+    return evidence_class in MEASURING_CLASSES
 
 
 def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
@@ -406,6 +475,17 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
     for doc in docs:
         model = str(doc.get("model") or "")
         prov = str(doc.get("provider") or "")
+        # Resolve the class FIRST: the status an entry gets depends on it, and
+        # computing it after the entry was created used the previous loop
+        # iteration's value.
+        #
+        # Artifacts serialize the class lowercased; the taxonomy is uppercase.
+        # Comparing the raw string meant this rejected EVERY artifact it was
+        # handed -- 17 of them in this ecosystem -- because `exploratory_beta`
+        # is not `EXPLORATORY_BETA`. Normalize, then match. The set is unchanged:
+        # an unknown name still raises below.
+        ec = _canonical_evidence_class(doc.get("evidence_class"))
+        role = str(doc.get("role") or "bounded_choice")
         target = by_model.get(model.lower()) or by_model.get(f"{prov}/{model}".lower())
         if target is None:
             target = RuntimeEntry(
@@ -414,14 +494,17 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 execution_backend=(ExecutionBackend.GROQ.value if prov == "groq"
                                    else ExecutionBackend.CEREBRAS.value if prov == "cerebras"
                                    else ExecutionBackend.UNKNOWN.value),
-                status=Status.TESTED.value, local=False,
+                # A smoke test proves wiring and a promotion changes routing;
+                # neither measures the capability, so an entry either mentions
+                # was DISCOVERED at most.
+                status=(Status.TESTED.value if _may_mark_tested(ec)
+                        else Status.DISCOVERED.value),
+                local=False,
                 notes="added from experiment evidence",
             )
             entries.append(target)
             by_model[model.lower()] = target
 
-        role = str(doc.get("role") or "bounded_choice")
-        ec = str(doc.get("evidence_class") or EvidenceClass.EXPLORATORY_BETA.value)
         ev = RoleEvidence(
             n=int(doc.get("n") or 0),
             success=doc.get("success"),
@@ -436,12 +519,50 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
         target.evidence[role] = ev
 
         # Typed trust follows the evidence class, not the success number.
-        if ec in promotable:
+        #
+        # The tier is DERIVED from the effects the class is allowed to influence
+        # in kvnloo/z0 registry/maturity.yaml (evidence: -> may_influence):
+        #
+        #   CONFIRM   capability_trust_record -> TRUSTED_BOUNDED  (within the measured distribution)
+        #   OOD       general_trust_record    -> TRUSTED_GENERAL  (beyond it; this is the
+        #                                                          class for generality claims)
+        #   SHADOW    shadow_trust_record     -> TRUSTED_SHADOW   (observation paths only)
+        #
+        # A class that may NOT influence a trust record gets none, however strong
+        # it is. PROMOTION is the case in point: its declared influence is
+        # `default_routing` and `install_profile_membership`, and the taxonomy
+        # says it "consumes CONFIRM and OOD evidence; it does not substitute for
+        # it". A promotion artifact alone therefore establishes no capability
+        # trust, and this branch used to grant TRUSTED_BOUNDED from one.
+        if ec in (EvidenceClass.CONFIRM.value, EvidenceClass.OOD.value):
             target.trust[role] = (
-                Trust.TRUSTED_BOUNDED.value if (ev.unsafe == 0 and (ev.success or 0) >= 0.8)
+                PRODUCTION_TIER_FOR[ec] if (ev.unsafe == 0 and (ev.success or 0) >= 0.8)
                 else Trust.QUARANTINED.value
             )
-        elif ec in (EvidenceClass.SHADOW.value, EvidenceClass.EXPLORATORY_BETA.value, EvidenceClass.SMOKE.value):
+        elif ec == EvidenceClass.PROMOTION.value:
+            # Verified as dormant in this ecosystem (no producer emits a
+            # promotion-class evidence document), but the code now matches the
+            # contract rather than contradicting it.
+            target.trust.pop(role, None)
+        elif ec == EvidenceClass.PAIRED_REPLAY.value:
+            # Paired replay establishes a COMPARISON, not a capability. The
+            # canonical taxonomy forbids it from influencing the trust record,
+            # so it is recorded as tested-and-experimental and no trust is
+            # granted even when the numbers look strong.
+            target.trust[role] = (
+                Trust.QUARANTINED.value if ev.unsafe else Trust.TESTED_EXPERIMENTAL.value
+            )
+        elif ec == EvidenceClass.SMOKE.value:
+            # The taxonomy gives SMOKE `may_influence: []`: it "proves wiring and
+            # nothing else". This branch used to fall through with the others and
+            # write TESTED_EXPERIMENTAL, which is a claim the capability was
+            # measured -- exactly what a wiring check cannot support. A
+            # RESTRICTION is still allowed here, because refusing on weak
+            # evidence is the safe direction.
+            target.trust[role] = (
+                Trust.QUARANTINED.value if ev.unsafe else Trust.UNTESTED.value
+            )
+        elif ec in (EvidenceClass.SHADOW.value, EvidenceClass.EXPLORATORY_BETA.value):
             if ev.unsafe:
                 # an unsafe exploratory result is quarantined immediately
                 target.trust[role] = Trust.QUARANTINED.value
@@ -449,7 +570,25 @@ def apply_evidence(entries: list[RuntimeEntry], docs: Iterable[dict]) -> None:
                 target.trust[role] = Trust.TRUSTED_SHADOW.value
             else:
                 target.trust[role] = Trust.TESTED_EXPERIMENTAL.value
-        target.status = Status.TESTED.value
+        else:
+            # No silent fallthrough. Before this, an unrecognised class skipped
+            # every branch: the row was still marked TESTED while receiving no
+            # trust at all, which is the worst of both -- it looks evaluated and
+            # carries no verdict.
+            raise ValueError(
+                f"unknown evidence_class {ec!r}; the canonical taxonomy is "
+                "defined in kvnloo/z0 registry/maturity.yaml (evidence:)"
+            )
+        # The row is marked TESTED only where the class licenses it. Setting it
+        # unconditionally here silently overrode the per-class status chosen
+        # above, so a SMOKE doc still produced a `tested` row: the taxonomy gives
+        # SMOKE `may_influence: []` because it proves wiring, not capability.
+        # A row is TESTED only where the class licenses `tested_observation` (or
+        # establishes a trust record, which presupposes a measurement). SMOKE
+        # proves wiring and PROMOTION changes routing; neither measures the
+        # capability, so neither may leave a row looking evaluated.
+        if _may_mark_tested(ec):
+            target.status = Status.TESTED.value
 
 
 # ------------------------------------------------------------------- assembly
