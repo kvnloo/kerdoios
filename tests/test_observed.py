@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -291,6 +292,60 @@ class PlanIntegrationTests(unittest.TestCase):
                 blend_mod.apply_observed = original
                 optimize_mod.apply_observed = original
 
+
+
+class FailureTaxonomyTests(unittest.TestCase):
+    """`reason` plus time-decayed trust: stale failures forgive themselves."""
+
+    def test_reason_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "observed.jsonl"
+            record(Observation("openrouter", "m1", "research", False, 0.0, reason="rate_limited"), path=path)
+            rows = load_observations(path=path)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0].reason, "rate_limited")
+
+    def test_legacy_lines_default_to_no_reason(self) -> None:
+        # A pre-taxonomy line has no `reason` and no `recorded_at`; it must load
+        # rather than be dropped, and its age must not be assumed to be zero.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "observed.jsonl"
+            path.write_text(json.dumps({
+                "provider": "openrouter", "model": "m1", "task_type": "research",
+                "completed": True, "actual_cost": 0.0, "retried": False,
+            }) + "\n", encoding="utf-8")
+            rows = load_observations(path=path)
+            self.assertIsNone(rows[0].reason)
+            self.assertGreater(rows[0].recorded_at, 0.0)
+
+    def test_old_failures_decay_below_trust_floor(self) -> None:
+        # 10 half-lives old weighs 2**-10 ~= 0.001 each, so five of them cannot
+        # clear the floor: a model that 429'd long ago is forgiven, not blacklisted.
+        from kerdoios.observed import HALF_LIFE_S
+
+        now = 1_800_000_000.0
+        old = now - 10 * HALF_LIFE_S
+        rows = [
+            Observation("openrouter", "m1", "research", False, 0.0, reason="rate_limited", recorded_at=old)
+            for _ in range(MIN_OBSERVATIONS)
+        ]
+        stats = aggregate(rows, now=now)[("openrouter", "m1")]
+        self.assertFalse(stats.trusted)
+        self.assertLess(stats.effective_n, MIN_OBSERVATIONS)
+
+    def test_recent_failures_still_penalize(self) -> None:
+        # The floor must not have been bought by ignoring the raw count: fresh
+        # failures are trusted (so they act) and drag the capability down.
+        offer = next(o for o in fixture_offers() if o.id == "frontier/paid")
+        rows = [
+            Observation(offer.provider, offer.model, "coding", False, 0.01, reason="rate_limited")
+            for _ in range(MIN_OBSERVATIONS)
+        ]
+        stats = aggregate(rows)[(offer.provider, offer.model)]
+        self.assertTrue(stats.trusted)
+        self.assertAlmostEqual(stats.decayed_completion_rate, 0.0)
+        blended = blend_offer(offer, stats)
+        self.assertLess(blended.capabilities.coding, offer.capabilities.coding)
 
 
 if __name__ == "__main__":
