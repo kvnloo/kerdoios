@@ -1,3 +1,8 @@
+---
+name: autodevelop
+description: Use when told to autodevelop or donate a coding pass: claim one issue, branch from origin/main, fail-then-pass, open a PR, never merge.
+---
+
 # Autodevelop
 
 Donate one coding pass. Do not invent a parallel process.

@@ -1,3 +1,8 @@
+---
+name: tdd
+description: Use on any bug fix or behavior change: write the failing red test first, then make it pass, and keep the red command as evidence.
+---
+
 # TDD
 
 Fail, then pass. The red command is part of the evidence receipt.
