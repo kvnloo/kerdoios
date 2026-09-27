@@ -121,10 +121,17 @@ class RegisterTests(unittest.TestCase):
                 )
             rows = load_observations(path=path)
             self.assertEqual(len(rows), 1)
+            # `recorded_at` is stamped at record time and the event carries no
+            # timestamp to preserve, so compare every field except the stamp.
+            row = rows[0]
+            expected = Observation("groq", "llama-3.3-70b", "coding", True, 0.01, False)
             self.assertEqual(
-                rows[0],
-                Observation("groq", "llama-3.3-70b", "coding", True, 0.01, False),
+                (row.provider, row.model, row.task_type, row.completed,
+                 row.actual_cost, row.retried, row.reason),
+                (expected.provider, expected.model, expected.task_type, expected.completed,
+                 expected.actual_cost, expected.retried, expected.reason),
             )
+            self.assertGreater(row.recorded_at, 0.0)
             self.assertEqual(payload["provider"], "groq")
             self.assertEqual(payload["model"], "llama-3.3-70b")
             self.assertTrue(payload["completed"])

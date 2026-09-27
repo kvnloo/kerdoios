@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_LOG_PATH = Path(
@@ -42,6 +43,12 @@ DEFAULT_LOG_PATH = Path(
 # benchmark's MIN_N=15 floor: a handful of lucky/unlucky runs must not
 # overwrite a fixture or provider_claim capability score.
 MIN_OBSERVATIONS = 5
+
+#: Recency half-life for observed outcomes. A model that 429'd an hour ago is
+#: penalized; one that 429'd last month is forgiven. Trust is measured on decayed
+#: weight, so stale failures fall below the floor on their own instead of
+#: blacklisting a model forever.
+HALF_LIFE_S = 86400.0
 
 
 def _opt_int(value: object) -> int | None:
@@ -72,6 +79,13 @@ class Observation:
     completed: bool
     actual_cost: float
     retried: bool = False
+    #: Failure taxonomy (None on success). Lets a placement explain WHY a model
+    #: was demoted instead of recording a bare completed=False.
+    reason: str | None = None
+    #: Unix timestamp of the outcome. Older lines default to load time, which is
+    #: the honest reading: a legacy row has unknown age and must not be treated as
+    #: permanently fresh.
+    recorded_at: float = field(default_factory=time.time)
     capability_id: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -104,6 +118,12 @@ class Observation:
             "actual_cost": self.actual_cost,
             "retried": self.retried,
         }
+        # Always serialize the decay inputs: `now` defaults to the newest
+        # recorded_at, so a row that omits its timestamp would silently be treated
+        # as age-zero on the next load and never decay.
+        if self.reason:
+            payload["reason"] = self.reason
+        payload["recorded_at"] = self.recorded_at
         if self.capability_id:
             payload["capability_id"] = self.capability_id
         if self.input_tokens is not None:
@@ -167,10 +187,17 @@ class OutcomeStats:
     mean_input_tokens: float | None = None
     mean_output_tokens: float | None = None
     mean_latency_ms: float | None = None
+    # Time-decayed views. `effective_n` is the recency-weighted observation count
+    # and `decayed_completion_rate` weights recent outcomes more. Trust is measured
+    # on `effective_n`, so a burst of stale failures decays below the floor instead
+    # of blacklisting a model forever. `n` stays the RAW count -- blend.py uses it
+    # for shrinkage, where the real sample size is what matters.
+    effective_n: float = 0.0
+    decayed_completion_rate: float = 0.0
 
     @property
     def trusted(self) -> bool:
-        return self.n >= MIN_OBSERVATIONS
+        return self.effective_n >= MIN_OBSERVATIONS
 
 
 def _from_payload(payload: dict) -> Observation:
@@ -196,6 +223,8 @@ def _from_payload(payload: dict) -> Observation:
         completed=completed,
         actual_cost=float(payload.get("actual_cost") or 0.0),
         retried=bool(payload.get("retried", False)),
+        reason=payload.get("reason"),
+        recorded_at=float(payload.get("recorded_at") or time.time()),
         capability_id=payload.get("capability_id"),
         input_tokens=_opt_int(payload.get("input_tokens")),
         output_tokens=_opt_int(payload.get("output_tokens")),
@@ -244,12 +273,42 @@ def load_observations(*, path: Path | None = None) -> list[Observation]:
     return rows
 
 
-def _stats_for(rows: list[Observation], *, provider: str, model: str, capability_id: str | None) -> OutcomeStats:
+def _recency_weight(recorded_at: float, now: float) -> float:
+    """Exponential decay by age, with half-life ``HALF_LIFE_S``."""
+    age = max(0.0, now - recorded_at)
+    return 0.5 ** (age / HALF_LIFE_S)
+
+
+def _stats_for(
+    rows: list[Observation],
+    *,
+    provider: str,
+    model: str,
+    capability_id: str | None,
+    now: float | None = None,
+) -> OutcomeStats:
     n = len(rows)
     completed = sum(1 for r in rows if r.completed)
     inputs = [r.input_tokens for r in rows if r.input_tokens is not None]
     outputs = [r.output_tokens for r in rows if r.output_tokens is not None]
     lats = [r.latency_ms for r in rows if r.latency_ms is not None]
+    if now is None:
+        now = max((r.recorded_at for r in rows), default=time.time())
+    weights = [_recency_weight(r.recorded_at, now) for r in rows]
+    # Snap float dust. `recorded_at` defaults to time.time(), so rows written
+    # microseconds apart differ in age by ~1e-5 s against a half-life of one DAY.
+    # That perturbs the sum in the 10th decimal, and a batch of exactly
+    # MIN_OBSERVATIONS fresh rows then computes to 4.999999999 -- below the floor,
+    # so a perfectly fresh model would be distrusted. Rounding to 6dp absorbs that
+    # jitter: the threshold is 5e-7 of effective_n, which at HALF_LIFE_S = 86400 is
+    # an age difference of ~0.06 s. No real decay is that small.
+    total_w = round(sum(weights), 6)
+    effective_n = float(total_w)
+    decayed_completion_rate = (
+        sum(w for w, r in zip(weights, rows) if r.completed) / effective_n
+        if effective_n > 0
+        else 0.0
+    )
     return OutcomeStats(
         provider=provider,
         model=model,
@@ -261,21 +320,32 @@ def _stats_for(rows: list[Observation], *, provider: str, model: str, capability
         mean_input_tokens=(sum(inputs) / len(inputs)) if inputs else None,
         mean_output_tokens=(sum(outputs) / len(outputs)) if outputs else None,
         mean_latency_ms=(sum(lats) / len(lats)) if lats else None,
+        effective_n=effective_n,
+        decayed_completion_rate=decayed_completion_rate,
     )
 
 
-def aggregate(observations: list[Observation]) -> dict[tuple[str, str], OutcomeStats]:
+def aggregate(
+    observations: list[Observation], *, now: float | None = None
+) -> dict[tuple[str, str], OutcomeStats]:
     """Aggregate by (provider, model) across all task types / capabilities.
 
     Floor used by blend.py. Capability-aware callers should use
     ``aggregate_by_capability`` + ``lookup_stats``.
+
+    ``now`` defaults to the newest observation across ALL buckets, so decay is
+    comparable between them; pass ``time.time()`` in production so a quiet log
+    still ages. Defaulting per-bucket would make an idle bucket look as fresh as
+    its own last row.
     """
     buckets: dict[tuple[str, str], list[Observation]] = defaultdict(list)
     for obs in observations:
         buckets[(obs.provider, obs.model)].append(obs)
+    if now is None:
+        now = max((o.recorded_at for o in observations), default=time.time())
     stats: dict[tuple[str, str], OutcomeStats] = {}
     for key, rows in buckets.items():
-        stats[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=None)
+        stats[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=None, now=now)
     return stats
 
 
@@ -288,7 +358,7 @@ def capability_family(capability_id: str | None) -> str | None:
 
 
 def aggregate_by_capability(
-    observations: list[Observation],
+    observations: list[Observation], *, now: float | None = None
 ) -> dict[tuple[str, str, str], OutcomeStats]:
     """Aggregate by (provider, model, capability_key).
 
@@ -304,12 +374,14 @@ def aggregate_by_capability(
         fam = capability_family(obs.capability_id)
         if fam and fam != obs.capability_id:
             family[(obs.provider, obs.model, fam)].append(obs)
+    if now is None:
+        now = max((o.recorded_at for o in observations), default=time.time())
     out: dict[tuple[str, str, str], OutcomeStats] = {}
     for key, rows in exact.items():
-        out[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=key[2])
+        out[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=key[2], now=now)
     for key, rows in family.items():
         # family rollup always overwrites exact-only collision only when fam==exact id
-        out[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=key[2])
+        out[key] = _stats_for(rows, provider=key[0], model=key[1], capability_id=key[2], now=now)
     return out
 
 
