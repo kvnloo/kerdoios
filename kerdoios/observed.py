@@ -50,6 +50,23 @@ MIN_OBSERVATIONS = 5
 #: blacklisting a model forever.
 HALF_LIFE_S = 86400.0
 
+MEASUREMENT_STATES = frozenset({"complete", "partial", "unsupported", "failed", "unknown"})
+EXPLICIT_INCOMPLETE_MEASUREMENT_STATES = frozenset({"partial", "unsupported", "failed"})
+
+
+def _opt_measurement_state(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    return text if text in MEASUREMENT_STATES else None
+
+
+def _opt_reason(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:500] if text else None
+
 
 def _opt_int(value: object) -> int | None:
     if value is None or value == "":
@@ -108,6 +125,10 @@ class Observation:
     baseline_tokens: int | None = None
     actual_tokens: int | None = None
     quota_group: str | None = None
+    # Measurement completeness is separate from execution/verification.
+    # Legacy rows omit it and therefore remain unknown, never implicitly complete.
+    measurement_state: str | None = None
+    state_reason: str | None = None
 
     def to_dict(self) -> dict:
         payload: dict = {
@@ -163,6 +184,10 @@ class Observation:
             payload["baseline_tokens"] = self.baseline_tokens
         if self.actual_tokens is not None:
             payload["actual_tokens"] = self.actual_tokens
+        if self.measurement_state is not None:
+            payload["measurement_state"] = self.measurement_state
+        if self.state_reason is not None:
+            payload["state_reason"] = self.state_reason[:500]
         return payload
 
 
@@ -246,6 +271,8 @@ def _from_payload(payload: dict) -> Observation:
         baseline_tokens=_opt_int(payload.get("baseline_tokens")),
         actual_tokens=_opt_int(payload.get("actual_tokens")),
         quota_group=payload.get("quota_group"),
+        measurement_state=_opt_measurement_state(payload.get("measurement_state")),
+        state_reason=_opt_reason(payload.get("state_reason")),
     )
 
 
@@ -454,16 +481,32 @@ def tokens_per_verified_task(
         total_tokens += int(r.input_tokens or 0) + int(r.output_tokens or 0)
     n_v = len(completed)
     n_tok = len(token_rows)
+    complete = [r for r in token_rows if r.measurement_state == "complete"]
+    explicit_incomplete = [
+        r for r in token_rows if r.measurement_state in EXPLICIT_INCOMPLETE_MEASUREMENT_STATES
+    ]
+    unknown = [r for r in token_rows if r.measurement_state in {None, "unknown"}]
+    authoritative = bool(completed) and n_tok == n_v and len(complete) == n_tok
+    observed_tokens_per_verified = (total_tokens / n_tok) if n_tok else None
+    observed_mean_cost = sum(r.actual_cost for r in completed) / n_v if n_v else None
     return {
         "schema": "kerdoios.tokens_per_verified.v1",
         "capability_id": capability_id,
         "n_observations": len(rows),
         "n_verified": n_v,
         "n_with_tokens": n_tok,
+        "n_measurement_complete": len(complete),
+        "n_measurement_explicit_incomplete": len(explicit_incomplete),
+        "n_measurement_unknown": len(unknown),
+        "authoritative": authoritative,
         "total_tokens_on_verified": total_tokens,
-        "tokens_per_verified_task": (total_tokens / n_tok) if n_tok else None,
-        "mean_cost_per_verified": (
-            sum(r.actual_cost for r in completed) / n_v if n_v else None
+        "tokens_per_verified_task": observed_tokens_per_verified,
+        "authoritative_tokens_per_verified_task": (
+            observed_tokens_per_verified if authoritative else None
+        ),
+        "mean_cost_per_verified": observed_mean_cost,
+        "authoritative_mean_cost_per_verified": (
+            observed_mean_cost if authoritative else None
         ),
         "completion_rate": (n_v / len(rows)) if rows else None,
     }
@@ -537,6 +580,8 @@ def import_allocation_observations(
             baseline_tokens=_opt_int(payload.get("baseline_tokens")),
             actual_tokens=_opt_int(payload.get("actual_tokens")),
             quota_group=payload.get("quota_group"),
+            measurement_state=_opt_measurement_state(payload.get("measurement_state")),
+            state_reason=_opt_reason(payload.get("state_reason")),
         )
         record(obs, path=dest)
         count += 1

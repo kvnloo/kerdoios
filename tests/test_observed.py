@@ -100,6 +100,27 @@ class CapabilityAggregateTests(unittest.TestCase):
             self.assertEqual(rows[0].capability_id, "blender.scene_reasoning")
             self.assertEqual(rows[0].input_tokens, 4200)
 
+    def test_measurement_state_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "observed.jsonl"
+            record(
+                Observation(
+                    "astra",
+                    "gpt",
+                    "coding",
+                    True,
+                    0.0,
+                    input_tokens=10,
+                    output_tokens=2,
+                    measurement_state="complete",
+                    state_reason="provider_response_usage",
+                ),
+                path=path,
+            )
+            row = load_observations(path=path)[0]
+            self.assertEqual(row.measurement_state, "complete")
+            self.assertEqual(row.state_reason, "provider_response_usage")
+
     def test_lookup_prefers_exact_capability_when_trusted(self) -> None:
         from kerdoios.observed import lookup_stats
 
@@ -195,6 +216,91 @@ class TokensPerVerifiedTests(unittest.TestCase):
         # 1000+200 + 500+100 = 1800 / 2 = 900
         self.assertAlmostEqual(s["tokens_per_verified_task"], 900.0)
         self.assertAlmostEqual(s["mean_cost_per_verified"], 0.015)
+
+
+    def test_partial_verified_tokens_are_observed_not_authoritative(self) -> None:
+        rows = [
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.02,
+                input_tokens=1000,
+                output_tokens=200,
+                execution_completed=True,
+                verified_success=True,
+                measurement_state="partial",
+                state_reason="missing_subagent_usage",
+            ),
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.01,
+                input_tokens=500,
+                output_tokens=100,
+                execution_completed=True,
+                verified_success=True,
+                measurement_state="complete",
+            ),
+        ]
+        stats = tokens_per_verified_task(rows)
+        self.assertEqual(stats["tokens_per_verified_task"], 900.0)
+        self.assertFalse(stats["authoritative"])
+        self.assertIsNone(stats["authoritative_tokens_per_verified_task"])
+        self.assertEqual(stats["n_measurement_explicit_incomplete"], 1)
+
+    def test_complete_verified_tokens_are_authoritative(self) -> None:
+        rows = [
+            Observation(
+                "openrouter",
+                "x",
+                "coding",
+                True,
+                0.02,
+                input_tokens=1000,
+                output_tokens=200,
+                execution_completed=True,
+                verified_success=True,
+                measurement_state="complete",
+            ),
+        ]
+        stats = tokens_per_verified_task(rows)
+        self.assertTrue(stats["authoritative"])
+        self.assertEqual(stats["authoritative_tokens_per_verified_task"], 1200.0)
+
+
+class RecordCliMeasurementStateTests(unittest.TestCase):
+    def test_record_cli_forwards_measurement_state(self) -> None:
+        from unittest.mock import patch
+
+        from kerdoios.__main__ import main
+
+        with patch("kerdoios.__main__.record") as write:
+            rc = main(
+                [
+                    "record",
+                    "--provider",
+                    "groq",
+                    "--model",
+                    "llama",
+                    "--completed",
+                    "--input-tokens",
+                    "10",
+                    "--output-tokens",
+                    "2",
+                    "--measurement-state",
+                    "partial",
+                    "--state-reason",
+                    "last_message_only",
+                ]
+            )
+        self.assertEqual(rc, 0)
+        obs = write.call_args.args[0]
+        self.assertEqual(obs.measurement_state, "partial")
+        self.assertEqual(obs.state_reason, "last_message_only")
 
 
 class BlendTests(unittest.TestCase):
