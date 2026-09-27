@@ -6,7 +6,7 @@
 schema: verified-oss-loop.inventory.v1
 kit: https://github.com/kvnloo/verified-oss-loop
 kit_revision: 7ba2782090bef0a5fe8a8e039a700d76f23ca274
-synced_at: 2026-09-15T01:05:12Z
+synced_at: 2026-09-27T03:50:13Z
 files:
   - path: .github/CODEOWNERS
     source: kit
@@ -92,6 +92,9 @@ files:
     source: kit
     sha256: 35129e006379d553c6688159251ed77582e339c78b4dfe9e1fcaf020c0c8deef
     kit_sha256: 35129e006379d553c6688159251ed77582e339c78b4dfe9e1fcaf020c0c8deef
+  - path: .verified-oss-loop/config.yml
+    source: local
+    sha256: 3ff3ebe97be58d5e67be9ed4365a14689a0aabb4bd4969afb397479a8415c377
   - path: .verified-oss-loop/kit-inventory.py
     source: kit
     sha256: b393a6f25c5f86ddf9bdcb2ec0cd3ba4d8edc544dbe0b4029a5c2fd48d235cf6
@@ -137,30 +140,33 @@ files:
     sha256: 0f49ebbfb241fee00c21f2dbf587cb4c1807354a30a9c879ec0611b04ed83654
     kit_sha256: 0f49ebbfb241fee00c21f2dbf587cb4c1807354a30a9c879ec0611b04ed83654
   - path: skills/anti-slop/SKILL.md
-    source: modified
+    source: local
     sha256: e093aed532b64a800ec12e103acf79636b511022ffc1fa46a003bbee03986064
     kit_sha256: 7151d5eea1dfd42f5cee0a37f0c03c5e151ab24a5d3f0fdaec94a65286facb76
   - path: skills/autodevelop/SKILL.md
-    source: kit
+    source: local
     sha256: 1f421dd35fdaeaaa2c05472d1b8eec9d94592fb67092c4bbcf4eac0f25e88dce
     kit_sha256: 1f421dd35fdaeaaa2c05472d1b8eec9d94592fb67092c4bbcf4eac0f25e88dce
+  - path: skills/contribute/SKILL.md
+    source: local
+    sha256: 997dc1c5dbcabd611b94ed487352b6ffab6826e6aa8402576aac3c23f68ed8ce
   - path: skills/dr-eggbot/SKILL.md
-    source: kit
+    source: local
     sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
     kit_sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
   - path: skills/orient/SKILL.md
-    source: kit
+    source: local
     sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
     kit_sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
   - path: skills/pstack/SKILL.md
-    source: kit
+    source: local
     sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
     kit_sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
   - path: skills/tdd/SKILL.md
-    source: modified
+    source: local
     sha256: f27408378bb3aa802bcef5350ef0e0e6fb96c8f5129be6a8fcd946a0b608b940
     kit_sha256: 31ed6f80001de1d27757cd84b464366a544320695c75d62d5fa0edc87963062b
   - path: skills/verify/SKILL.md
-    source: modified
+    source: local
     sha256: f577fd8104619f7ebbb2b535ee5185bc5f59a5dbdcca19e984ce657cd9d44834
     kit_sha256: 41a045bd22ea9ce94114925fd80493fbe431489d0c5511f0b43588b1f5c42ca9
