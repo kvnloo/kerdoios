@@ -1,3 +1,8 @@
+---
+name: contribute
+description: Use when you have forked or cloned Kerdoios in a coding harness and want the whole first contribution pass, from green baseline to evidence receipt.
+---
+
 # Contribute
 
 You forked or cloned Kerdoios in a coding harness (Cursor, Codex, Claude Code, Hermes). This is the whole first pass. Do not invent a second loop.

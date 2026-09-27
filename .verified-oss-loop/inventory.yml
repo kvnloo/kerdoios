@@ -6,7 +6,7 @@
 schema: verified-oss-loop.inventory.v1
 kit: https://github.com/kvnloo/verified-oss-loop
 kit_revision: 7ba2782090bef0a5fe8a8e039a700d76f23ca274
-synced_at: 2026-09-27T03:50:13Z
+synced_at: 2026-09-27T03:50:37Z
 files:
   - path: .github/CODEOWNERS
     source: kit
@@ -141,32 +141,35 @@ files:
     kit_sha256: 0f49ebbfb241fee00c21f2dbf587cb4c1807354a30a9c879ec0611b04ed83654
   - path: skills/anti-slop/SKILL.md
     source: local
-    sha256: e093aed532b64a800ec12e103acf79636b511022ffc1fa46a003bbee03986064
+    sha256: 1d89668bc965974eb91bbf9a7c19988edf2bc1d5f166384a3b6e8f21781a1c45
     kit_sha256: 7151d5eea1dfd42f5cee0a37f0c03c5e151ab24a5d3f0fdaec94a65286facb76
   - path: skills/autodevelop/SKILL.md
     source: local
-    sha256: 1f421dd35fdaeaaa2c05472d1b8eec9d94592fb67092c4bbcf4eac0f25e88dce
+    sha256: b4d2e9cbb0d424c73cd67317c0644154b77818526e84069c611436076e36d7c8
     kit_sha256: 1f421dd35fdaeaaa2c05472d1b8eec9d94592fb67092c4bbcf4eac0f25e88dce
   - path: skills/contribute/SKILL.md
     source: local
-    sha256: 997dc1c5dbcabd611b94ed487352b6ffab6826e6aa8402576aac3c23f68ed8ce
+    sha256: 9be5505a31b6e44bb22f7b7a887f7c5ed69252190e066e8c802a67ebd1906b85
   - path: skills/dr-eggbot/SKILL.md
     source: local
-    sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
+    sha256: 27d5bb96ef226a4853c23c7bffa3b7e6d906ef5e9d5219546049d3df41ed3bdf
     kit_sha256: 2d0aa3c4df219e25cbd89d6bacf8d0d2a01d5aeeaaeed963e6f3c9414b6855f5
+  - path: skills/kerdoios/SKILL.md
+    source: local
+    sha256: d8d044b4f25f3aaa741435dc8d7ed8313c564efd9222675ab2cb490612a9ce01
   - path: skills/orient/SKILL.md
     source: local
-    sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
+    sha256: 48e2ce62c33eb29bccfe8c89ecc8c4ee6fac79e380f3742d9fe3895a2516b98f
     kit_sha256: 2f41f2ad4b411aa9e7fd9db704018838cd1e15eaca92eb45d5923886d1da6f2f
   - path: skills/pstack/SKILL.md
     source: local
-    sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
+    sha256: 0d5c4b43d32c1a97804d3ac7e210b44f5668674ebc960bf665908d74365d9a77
     kit_sha256: 8ba54e9382e1003d50a9851c79a1416f78da45babc84297a94841e2ff3c518c1
   - path: skills/tdd/SKILL.md
     source: local
-    sha256: f27408378bb3aa802bcef5350ef0e0e6fb96c8f5129be6a8fcd946a0b608b940
+    sha256: d164d928d08ebe79cb6f71763c35ef1f01c7ab62fcbe4f0b02738a1091ef9383
     kit_sha256: 31ed6f80001de1d27757cd84b464366a544320695c75d62d5fa0edc87963062b
   - path: skills/verify/SKILL.md
     source: local
-    sha256: f577fd8104619f7ebbb2b535ee5185bc5f59a5dbdcca19e984ce657cd9d44834
+    sha256: 8a5555fb76ef458ea0dfd2c004bbbcf3fef0adbf85f87c8d922fbe68ecb7a34a
     kit_sha256: 41a045bd22ea9ce94114925fd80493fbe431489d0c5511f0b43588b1f5c42ca9
