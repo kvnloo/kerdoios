@@ -9,7 +9,13 @@ from .aodl import AodlIngestError, load_aodl, work_requirement_from_aodl
 from .allocation_request import AllocationRequestError, load_allocation_request, work_requirement_from_allocation_request
 from .explain import explain
 from .inventory import discover_all
-from .observed import Observation, import_allocation_observations, record, tokens_per_verified_task
+from .observed import (
+    MEASUREMENT_STATES,
+    Observation,
+    import_allocation_observations,
+    record,
+    tokens_per_verified_task,
+)
 from .optimize import plan
 from .providers.free import is_free
 from .types import Mode, WorkRequirement
@@ -141,6 +147,19 @@ def main(argv: list[str] | None = None) -> int:
     record_p.add_argument("--trace-id", dest="trace_id", default=None)
     record_p.add_argument("--turn-id", dest="turn_id", default=None)
     record_p.add_argument("--quota-group", dest="quota_group", default=None)
+    record_p.add_argument(
+        "--measurement-state",
+        dest="measurement_state",
+        choices=sorted(MEASUREMENT_STATES),
+        default=None,
+        help="Measurement coverage: complete|partial|unsupported|failed|unknown",
+    )
+    record_p.add_argument(
+        "--state-reason",
+        dest="state_reason",
+        default=None,
+        help="Bounded non-secret reason code/text for measurement state",
+    )
     obs_p = sub.add_parser("observations", help="Observation log utilities")
     obs_sub = obs_p.add_subparsers(dest="obs_command", required=True)
     obs_imp = obs_sub.add_parser("import", help="Import z0int.allocation_observation.v1 JSONL")
@@ -187,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
                 trace_id=getattr(ns, "trace_id", None),
                 turn_id=getattr(ns, "turn_id", None),
                 quota_group=getattr(ns, "quota_group", None),
+                measurement_state=getattr(ns, "measurement_state", None),
+                state_reason=getattr(ns, "state_reason", None),
             )
         )
         return 0
