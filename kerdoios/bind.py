@@ -33,6 +33,10 @@ def _ordered_offers(plan: ExecutionPlan, offers: list[ResourceOffer]) -> list[Re
         offer = lookup.get(offer_id)
         if offer is None or offer.id in seen:
             continue
+        if offer.economics.subscription is not None:
+            # A plan window is a harness session (Claude Code, Codex CLI), not a
+            # Hermes API provider; binding it would route to billed OpenRouter.
+            continue
         seen.add(offer.id)
         ordered.append(offer)
     return ordered

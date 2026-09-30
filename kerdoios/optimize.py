@@ -40,6 +40,10 @@ def _hard_reject(offer: ResourceOffer, req: WorkRequirement) -> str | None:
         return "tool use required"
     if req.tools and any(tool not in offer.tools and "*" not in offer.tools for tool in req.tools):
         return f"missing tools {sorted(set(req.tools) - set(offer.tools))}"
+    window = offer.economics.subscription
+    if window is not None and window.exhausted:
+        hours = (window.seconds_until_reset or 0.0) / 3600
+        return f"subscription {window.group}:{window.window} exhausted for {hours:.1f}h until reset (offload)"
     if capability_fit(offer, req) <= 0.0:
         return "capability below requirement"
     if offer.telemetry.availability < req.minimum_reliability:

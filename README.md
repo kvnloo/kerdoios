@@ -92,6 +92,19 @@ python3 -m kerdoios apply --mode cheap --workers 2 --hermes-config ~/.hermes/con
 
 `apply` writes Hermes `fallback_providers` and an OMP `modelRoles` overlay. It does not call models.
 
+### Subscription windows
+
+`plan` and `explain` also read flat-rate plan windows (Claude, Codex, Cursor, Grok, ...) and add one `subscription/<plan>` offer per plan. The source is `z0int posture --json` when z0int is installed, else the usage-island CodexBar cache `~/.cache/codexbar-waybar/last.json`. Both are local files. No credentials or account identity are read. Each offer carries the binding window's remaining fraction, `resets_at`, `seconds_until_quota_reset`, and a posture:
+
+| posture | effect |
+|---|---|
+| BURN (reset within 24h, >= 20% projected to perish) | fitness x(1 + 0.5 x perishing share) |
+| OFFLOAD, exhausted | hard-rejected until reset |
+| OFFLOAD, over pace | fitness x0.5 |
+| RESERVE (tight) | fitness x0.85 |
+
+A missing, unreadable, or stale (> 6h) snapshot leaves the plan unchanged, and `explain` prints the reason. Subscription offers are never written by `apply`: a plan window is a harness session, not a Hermes API provider. Opt out with `--no-subscriptions`, `subscriptions: false`, or `KERDOIOS_POSTURE_SOURCE=off`. Force a source with `KERDOIOS_POSTURE_SOURCE=z0int|codexbar`, and set the cache path with `KERDOIOS_CODEXBAR`.
+
 Once loaded by Hermes:
 
 ```text

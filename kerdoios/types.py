@@ -44,6 +44,40 @@ class Capacity:
     vram_gb: float | None = None
 
 
+PostureKind = Literal["BURN", "BALANCED", "RESERVE", "OFFLOAD"]
+
+
+@dataclass(frozen=True)
+class SubscriptionWindow:
+    """One flat-rate plan window (e.g. Claude weekly) as observed locally.
+
+    Subscription quota is sunk cost: the question is not price but whether
+    unused capacity perishes at ``resets_at`` (BURN) or the observed pace
+    empties the window before then (OFFLOAD). No account identity is kept.
+    """
+
+    group: str  # claude | codex | cursor | grok | ...
+    window: str  # 5h | weekly | 30d | scoped extra id
+    remaining_fraction: float  # 0..1 of the window
+    resets_at: str | None
+    seconds_until_reset: float | None
+    window_minutes: float | None
+    posture: PostureKind = "BALANCED"
+    reason: str = ""
+    arithmetic: str = ""
+    surplus_fraction_at_reset: float | None = None  # projected unused share of capacity at reset
+    confidence: str = "ok"  # ok | low | stale
+    observed_at: str | None = None
+    source: str = "codexbar"
+
+    @property
+    def exhausted(self) -> bool:
+        return self.remaining_fraction <= 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 @dataclass(frozen=True)
 class Economics:
     input_token_price: float | None = None
@@ -56,10 +90,14 @@ class Economics:
     # Dimensional quota (rpm/rpd/tpm/tpd + provenance). The scalar fields above
     # stay for existing callers; this is the non-lossy picture.
     quota: "QuotaState | None" = None
+    # Binding subscription window when this offer is a flat-rate plan pool.
+    subscription: SubscriptionWindow | None = None
 
     def marginal_cost_per_token(self) -> float:
         if self.remaining_free_quota > 0 or self.remaining_credits > 0:
             return 0.0
+        if self.subscription is not None and not self.subscription.exhausted:
+            return 0.0  # flat-rate plan: the window is already paid for
         inp = self.input_token_price
         out = self.output_token_price
         # Unset prices are unknown; callers must not treat this 0 as a free tier.
@@ -69,6 +107,9 @@ class Economics:
         """Higher when free capacity is about to vanish. Permanent local stock is 1.0."""
         horizon = self.seconds_until_credits_expire or self.seconds_until_quota_reset
         free = self.remaining_free_quota + self.remaining_credits
+        if self.subscription is not None:
+            # Plan windows are metered as a fraction of the window, not tokens.
+            free = self.subscription.remaining_fraction
         if free <= 0:
             return 1.0
         if horizon is None or horizon <= 0:
@@ -188,6 +229,8 @@ class ExecutionPlan:
     quota_reservations: list[dict[str, Any]] = field(default_factory=list)
     join_policy: str | None = None
     schema: str = "kerdoios.execution_plan.v2"
+    # Subscription window report (status, reason, windows) when it was consulted.
+    subscription_windows: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -206,4 +249,5 @@ class ExecutionPlan:
             "retry_policy": self.retry_policy or {"max_retries": 0, "on_failure": "fallback"},
             "quota_reservations": list(self.quota_reservations),
             "join_policy": self.join_policy or "all",
+            **({"subscription_windows": self.subscription_windows} if self.subscription_windows is not None else {}),
         }

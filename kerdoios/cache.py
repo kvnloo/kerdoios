@@ -58,6 +58,9 @@ def _economics_from_dict(raw: Any) -> Economics:
         return Economics()
     fields = dict(raw)
     quota_raw = fields.pop("quota", None)
+    # Subscription windows are re-read from the local snapshot on every plan;
+    # a cached copy would be stale by construction.
+    fields.pop("subscription", None)
     economics = Economics(**fields)
     if quota_raw is None:
         return economics

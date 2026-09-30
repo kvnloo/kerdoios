@@ -34,8 +34,47 @@ def explain(offers: list[ResourceOffer], req: WorkRequirement, built: ExecutionP
     if result.fallbacks:
         lines.append("Fallback order: " + ", ".join(result.fallbacks))
         lines.append("")
+    sub = result.subscription_windows
+    if sub is not None:
+        lines.extend(_subscription_lines(sub, result))
     if result.rejections:
         lines.append("Not selected (hard filter):")
         for rejection in result.rejections[:12]:
             lines.append(f"  - {rejection.offer_id}: {rejection.reason}")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _subscription_lines(sub: dict, result: ExecutionPlan) -> list[str]:
+    head = f"Subscription windows ({sub.get('source')}): {sub.get('status')}"
+    if sub.get("factory_posture"):
+        head += f"  factory={sub['factory_posture']}"
+    if sub.get("snapshot_at"):
+        head += f"  snapshot={sub['snapshot_at']}"
+    lines = [head]
+    if sub.get("status") != "ok":
+        lines.append(f"  ~ {sub.get('reason')}")
+    for w in sub.get("windows") or []:
+        lines.append(
+            f"  {w['posture']:<8} {w['group']}:{w['window']:<22} "
+            f"{w['remaining_fraction'] * 100:5.1f}% left  resets {w['resets_at']}  {w['arithmetic']}"
+        )
+    for skip in sub.get("skipped") or []:
+        lines.append(f"  ~ skipped {skip}")
+    # Effect on the plan per plan offer, so an OFFLOAD verdict is visible even
+    # when the hard-filter list below is truncated.
+    placed = {p.offer_id for p in result.placements}
+    groups = sorted({w["group"] for w in sub.get("windows") or []})
+    rejected = {r.offer_id: r.reason for r in result.rejections}
+    for group in groups:
+        oid = f"subscription/{group}"
+        if oid in placed:
+            effect = "placed"
+        elif oid in rejected:
+            effect = f"rejected: {rejected[oid]}"
+        elif oid in result.fallbacks:
+            effect = f"fallback #{result.fallbacks.index(oid) + 1}"
+        else:
+            effect = "eligible, ranked below the fallback list"
+        lines.append(f"  -> {oid}: {effect}")
+    lines.append("")
+    return lines

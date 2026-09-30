@@ -14,6 +14,7 @@ from .explain import explain
 from .inventory import discover_all
 from .observed import Observation, record
 from .optimize import plan
+from .providers import subscription
 from .providers.free import is_free
 from .types import Mode, PrivacyClass, WorkRequirement
 
@@ -96,6 +97,10 @@ PLAN_SCHEMA = {
                 "type": "boolean",
                 "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
             },
+            "subscriptions": {
+                "type": "boolean",
+                "description": "Rank flat-rate plan windows by posture: burn quota that perishes at reset, shed over-pace plans (default true; z0int posture or CodexBar cache, offline, fail-open)",
+            },
             "aodl": {"description": "AODL-shaped work spec object or JSON path"},
             "capability_id": {
                 "type": "string",
@@ -119,6 +124,10 @@ EXPLAIN_SCHEMA = {
             "observed": {
                 "type": "boolean",
                 "description": "Blend in observed execution outcomes (KERDOIOS_OBSERVED_LOG or ~/.hermes/cache/kerdoios/observed.jsonl)",
+            },
+            "subscriptions": {
+                "type": "boolean",
+                "description": "Rank flat-rate plan windows by posture: burn quota that perishes at reset, shed over-pace plans (default true; z0int posture or CodexBar cache, offline, fail-open)",
             },
             "aodl": {"description": "AODL-shaped work spec object or JSON path"},
         },
@@ -213,22 +222,27 @@ def register(ctx: Any) -> None:
             refresh=refresh,
         )
 
+    def _planned(args: dict[str, Any], requirement: WorkRequirement):
+        enabled = args.get("subscriptions", True) is not False and not bool(args.get("free"))
+        offers, windows = subscription.attach(_offers(args), enabled=enabled)
+        built = plan(offers, requirement, use_observed=bool(args.get("observed")))
+        built.subscription_windows = windows.to_dict()
+        return offers, built
+
     def handle_plan(args: dict[str, Any], **kwargs: Any) -> str:
         try:
             requirement = _req_from_args(args)
         except AodlIngestError as exc:
             return f"aodl: {exc}"
-        return json.dumps(
-            plan(_offers(args), requirement, use_observed=bool(args.get("observed"))).to_dict(),
-            indent=2,
-        )
+        return json.dumps(_planned(args, requirement)[1].to_dict(), indent=2)
 
     def handle_explain(args: dict[str, Any], **kwargs: Any) -> str:
         try:
             requirement = _req_from_args(args)
         except AodlIngestError as exc:
             return f"aodl: {exc}"
-        return explain(_offers(args), requirement, use_observed=bool(args.get("observed")))
+        offers, built = _planned(args, requirement)
+        return explain(offers, requirement, built, use_observed=bool(args.get("observed")))
 
     def handle_inventory(args: dict[str, Any], **kwargs: Any) -> str:
         return json.dumps([_inventory_row(offer) for offer in _offers(args)], indent=2)
@@ -343,6 +357,7 @@ def register(ctx: Any) -> None:
             "observed": bool(getattr(ns, "observed", False)),
             "aodl": aodl,
             "capability_id": getattr(ns, "capability_id", None),
+            "subscriptions": not bool(getattr(ns, "no_subscriptions", False)),
             "hermes_config": getattr(ns, "hermes_config", None),
             "omp_config": getattr(ns, "omp_config", None),
         }
@@ -373,6 +388,8 @@ def register(ctx: Any) -> None:
                 p.add_argument("--observed", action="store_true")
                 p.add_argument("--aodl", default=None)
                 p.add_argument("--capability-id", dest="capability_id", default=None)
+            if name in ("plan", "explain"):
+                p.add_argument("--no-subscriptions", dest="no_subscriptions", action="store_true")
             if name == "apply":
                 p.add_argument("--hermes-config", default=None)
                 p.add_argument("--omp-config", default=None)

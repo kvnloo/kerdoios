@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .providers.subscription import posture_factor, posture_reason
 from .types import Mode, ResourceOffer, WorkRequirement
 
 
@@ -19,6 +20,10 @@ class ScoredOffer:
 
 def effective_unit_cost(offer: ResourceOffer, req: WorkRequirement) -> float:
     tokens = max(1, req.estimated_input_tokens + req.estimated_output_tokens)
+    window = offer.economics.subscription
+    if window is not None and not window.exhausted:
+        # Flat-rate plan window: already paid for, so the marginal worker is $0.
+        return 0.0
     free = offer.economics.remaining_free_quota + offer.economics.remaining_credits
     inp = offer.economics.input_token_price
     out = offer.economics.output_token_price
@@ -65,9 +70,15 @@ def score(offer: ResourceOffer, req: WorkRequirement, weights: dict[str, float])
     ) * (0.85 + 0.15 * min(urgency, 3.0) / 3.0)
     if req.mode == Mode.PRIVATE and offer.local:
         fitness *= 1.4
+    window = offer.economics.subscription
+    if window is not None:
+        # Perishability, not price: burn surplus that expires, shed over-pace plans.
+        fitness *= posture_factor(window)
     reasons = []
+    if window is not None:
+        reasons.append(posture_reason(window))
     if unit_cost == 0.0:
-        reasons.append("$0 marginal cost (quota or credit)")
+        reasons.append("$0 marginal cost (subscription window)" if window is not None else "$0 marginal cost (quota or credit)")
     if urgency > 1.5:
         reasons.append("expiring free capacity")
     if offer.local:

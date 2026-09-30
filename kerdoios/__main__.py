@@ -18,6 +18,7 @@ from .observed import (
     tokens_per_verified_task,
 )
 from .optimize import plan
+from .providers import subscription
 from .providers.free import is_free
 from .types import Mode, WorkRequirement
 
@@ -123,6 +124,13 @@ def main(argv: list[str] | None = None) -> int:
             dest="allocation_request",
             default=None,
             help="z0int.allocation_request.v1 JSON path (or - for stdin)",
+        )
+    for item in (plan_p, explain_p):
+        item.add_argument(
+            "--no-subscriptions",
+            dest="no_subscriptions",
+            action="store_true",
+            help="Ignore subscription plan windows (z0int posture / CodexBar cache)",
         )
     apply_p.add_argument("--hermes-config", default=None, help="Hermes config.yaml to receive fallback_providers")
     apply_p.add_argument("--omp-config", default=None, help="OMP overlay YAML to receive modelRoles")
@@ -274,7 +282,15 @@ def main(argv: list[str] | None = None) -> int:
         s = projection.summary(entries)
         print(_json.dumps(s if ns.summary else s, indent=2))
         return 0
+    windows = None
+    if ns.command in ("plan", "explain"):
+        # Plan windows are sunk cost, so a free-only request leaves them out.
+        offers, windows = subscription.attach(
+            offers, enabled=not free_only and not getattr(ns, "no_subscriptions", False)
+        )
     built = plan(offers, requirement, use_observed=bool(getattr(ns, "observed", False)))
+    if windows is not None:
+        built.subscription_windows = windows.to_dict()
     if ns.command == "explain":
         print(explain(offers, requirement, built))
         return 0
