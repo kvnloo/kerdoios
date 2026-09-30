@@ -86,3 +86,7 @@ class PackagingTests(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr + proc.stdout)
         self.assertIn("placements", proc.stdout)
+
+    def test_pyproject_uses_real_setuptools_backend(self) -> None:
+        text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn('build-backend = "setuptools.build_meta"', text)
