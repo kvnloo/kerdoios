@@ -1,0 +1,52 @@
+version: 1
+repo: kvnloo/kerdoios
+id: kerdoios
+component: kerdoios
+kind: component
+summary: Heterogeneous compute portfolio planner that discovers resource offers, applies hard constraints, prices effective/perishable capacity, and returns an execution plan while leaving semantic suitability and execution to sibling systems.
+
+architecture:
+  subsystems:
+    - id: resource-inventory
+      name: Resource inventory
+      kind: compute
+      summary: Discovers public free models, configured provider offers, and local inference endpoints while preserving unknown price/quota state.
+      paths: [kerdoios/providers/, kerdoios/, docs/]
+    - id: hard-filter
+      name: Hard constraint filter
+      kind: policy
+      summary: Rejects resource offers that violate context, tool, privacy, capability, or other non-negotiable work requirements before optimization.
+      paths: [kerdoios/, tests/]
+      depends_on: [resource-inventory]
+    - id: portfolio-planner
+      name: Execution portfolio planner
+      kind: routing
+      summary: Computes effective cost, perishable quota, Pareto candidates, and multi-worker portfolios rather than selecting one endpoint.
+      paths: [kerdoios/, tests/]
+      depends_on: [resource-inventory, hard-filter]
+    - id: local-placement
+      name: Local cognition placement
+      kind: placement
+      summary: Answers whether an already-selected capability can run locally now, which runtime/quant fits, and co-residency constraints without deciding semantic suitability.
+      paths: [docs/local-cognition-placement.md, kerdoios/]
+      depends_on: [resource-inventory, hard-filter]
+    - id: hermes-plugin
+      name: Hermes plugin surface
+      kind: integration
+      summary: Exposes inventory, planning, and explain operations as a standalone Hermes plugin while Hermes remains execution authority.
+      paths: [plugin.yaml, kerdoios/, skills/]
+      depends_on: [portfolio-planner]
+
+  provides_interfaces: [kerdoios.route.v1]
+  consumes_interfaces: [tokenomics.event.v0, z0int.decision_receipt.v1]
+  produces_representations: []
+  consumes_representations: []
+
+  boundaries:
+    owns: [resource inventory, provider and local placement, quota-aware portfolio planning, compute allocation policy]
+    not_here: [semantic capability selection, model/tool execution, token measurement semantics, AODL ontology, harness orchestration]
+
+  evidence:
+    docs: [README.md, ROADMAP.md, docs/local-cognition-placement.md, UPSTREAM.md]
+    tests: [tests/]
+    schemas: [plugin.yaml]
