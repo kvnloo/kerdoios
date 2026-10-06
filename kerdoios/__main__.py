@@ -123,6 +123,14 @@ def main(argv: list[str] | None = None) -> int:
             help="z0int.allocation_request.v1 JSON path (or - for stdin)",
         )
 
+    cap_p = sub.add_parser(
+        "capacity",
+        help="Emit read-only provider/free-capacity projection for z0/CompanyOS",
+    )
+    cap_p.add_argument("--refresh", action="store_true", help="Refresh provider discovery first")
+    cap_p.add_argument("--output", default=None, help="Projection destination")
+    cap_p.add_argument("--json", action="store_true", help="Print the complete projection")
+
     record_p = sub.add_parser("record", help="Log an observed execution outcome")
     record_p.add_argument("--provider", required=True)
     record_p.add_argument("--model", required=True)
@@ -171,6 +179,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
     ns = parser.parse_args(argv)
+    if ns.command == "capacity":
+        from .capacity_projection import main as capacity_main
+
+        capacity_argv: list[str] = []
+        if ns.refresh:
+            capacity_argv.append("--refresh")
+        if ns.output:
+            capacity_argv.extend(["--output", ns.output])
+        if ns.json:
+            capacity_argv.append("--json")
+        return capacity_main(capacity_argv)
     if ns.command == "observations":
         if ns.obs_command == "import":
             print(json.dumps(import_allocation_observations(ns.path, dest=ns.dest), indent=2))
