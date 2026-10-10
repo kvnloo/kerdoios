@@ -167,6 +167,17 @@ class LedgerPersistenceTests(unittest.TestCase):
 
 
 class ReceiptReconciliationTests(unittest.TestCase):
+    def test_mapping_boolean_signals_do_not_use_truthiness(self) -> None:
+        for field in ("success", "verified_outcome", "completed", "verified_success"):
+            for value in ("false", "true", "0", "1", 0, 1, [], {}, None, False, True):
+                with self.subTest(field=field, value=value):
+                    receipt = UsageReceipt.from_dict({"provider": "groq", "model": "m", field: value})
+                    expected = value if type(value) is bool else None
+                    actual = receipt.success if field in ("success", "completed") else receipt.verified_outcome
+                    self.assertIs(actual, expected)
+                    if field in ("verified_outcome", "verified_success"):
+                        self.assertEqual(summarize_receipts([receipt]).verified, int(expected is True))
+
     def test_receipt_fields_are_consumed(self) -> None:
         receipt = UsageReceipt.from_dict(
             {

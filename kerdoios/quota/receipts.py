@@ -57,9 +57,8 @@ def _opt_float(value: Any) -> float | None:
 
 
 def _opt_bool(value: Any) -> bool | None:
-    if value is None:
-        return None
-    return bool(value)
+    # Truthy strings/numbers are not measured boolean outcome signals.
+    return value if type(value) is bool else None
 
 
 def _first(payload: Mapping[str, Any], *keys: str) -> Any:
