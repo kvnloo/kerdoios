@@ -235,8 +235,9 @@ def main(argv: list[str] | None = None) -> int:
         offers = []
         if getattr(ns, "live", False):
             offers = discover_all(include_fixture=False, live=True, free_only=True)
-        print(json.dumps(build_fanout(offers, workers=int(ns.workers)), indent=2))
-        return 0
+        fanout = build_fanout(offers, workers=int(ns.workers))
+        print(json.dumps(fanout, indent=2))
+        return 0 if fanout["slots"] else 1
     requirement = None
     if ns.command not in ("inventory", "runtime", "free-fanout"):
         try:

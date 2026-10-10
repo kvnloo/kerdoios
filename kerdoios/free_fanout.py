@@ -6,6 +6,8 @@ paid parents are never a slot.
 
 from __future__ import annotations
 
+import re
+from dataclasses import replace
 from typing import Any
 
 from .providers.free import is_free
@@ -27,8 +29,17 @@ PREFERRED: tuple[tuple[str, str], ...] = (
 
 
 def blocked(provider: str | None) -> bool:
-    name = (provider or "").lower()
-    return name in BLOCKED_PROVIDERS or name.startswith("cursor")
+    name = (provider or "").strip().lower()
+    return name in BLOCKED_PROVIDERS or any(part.startswith("cursor") for part in re.split("[^a-z0-9]+", name))
+
+
+def _cursor_route(route: str | None) -> bool:
+    return any(part.strip().startswith("cursor") for part in (route or "").lower().split("/"))
+
+
+def _free_without_credits(offer: ResourceOffer) -> bool:
+    # A credit balance is money already paid: spending it is not a $0 probe.
+    return is_free(replace(offer, economics=replace(offer.economics, remaining_credits=0.0)))
 
 
 def _slot(provider: str, model: str, *, source: str) -> dict[str, Any]:
@@ -40,7 +51,7 @@ def _from_offers(offers: list[ResourceOffer]) -> list[dict[str, Any]]:
     for offer in offers:
         if offer.resource_type != "llm" or not offer.model or blocked(offer.provider):
             continue
-        if not is_free(offer):
+        if _cursor_route(offer.model) or _cursor_route(offer.id) or not _free_without_credits(offer):
             continue
         by_provider.setdefault(offer.provider, offer)
     ordered: list[dict[str, Any]] = []
@@ -65,8 +76,8 @@ def _static_slots() -> list[dict[str, Any]]:
 def build_fanout(offers: list[ResourceOffer] | None = None, *, workers: int = 5) -> dict[str, Any]:
     if workers < 1 or workers > 8:
         raise ValueError("workers must be an integer from 1 to 8")
-    discovered = _from_offers(list(offers or []))
-    pool = discovered or _static_slots()
+    supplied = list(offers or [])
+    pool = _from_offers(supplied) if supplied else _static_slots()
     chosen = pool[:workers]
     slots = []
     for index, primary in enumerate(chosen):
@@ -80,7 +91,7 @@ def build_fanout(offers: list[ResourceOffer] | None = None, *, workers: int = 5)
                 "sidestep": chain[1:],
             }
         )
-    return {
+    plan = {
         "schema": SCHEMA,
         "workers": len(slots),
         "requested_workers": workers,
@@ -90,3 +101,6 @@ def build_fanout(offers: list[ResourceOffer] | None = None, *, workers: int = 5)
         "slots": slots,
         "note": "Plan only. z0intelligence executes. 402/429 jump to the next free provider in the same call.",
     }
+    if not slots:
+        plan["reason"] = "no_free_offer_in_inventory"
+    return plan
