@@ -167,6 +167,19 @@ class LedgerPersistenceTests(unittest.TestCase):
 
 
 class ReceiptReconciliationTests(unittest.TestCase):
+    def test_negative_token_counts_refuse_before_receipt_projection(self) -> None:
+        for field in ("prompt_tokens", "completion_tokens", "cache_tokens"):
+            with self.subTest(field=field):
+                with self.assertRaises(ValueError):
+                    UsageReceipt.from_dict({"provider": "groq", "model": "m", field: -100})
+                with self.assertRaises(ValueError):
+                    constructors = {
+                        "prompt_tokens": lambda: UsageReceipt(provider="groq", model="m", prompt_tokens=-100),
+                        "completion_tokens": lambda: UsageReceipt(provider="groq", model="m", completion_tokens=-100),
+                        "cache_tokens": lambda: UsageReceipt(provider="groq", model="m", cache_tokens=-100),
+                    }
+                    constructors[field]()
+
     def test_mapping_boolean_signals_do_not_use_truthiness(self) -> None:
         for field in ("success", "verified_outcome", "completed", "verified_success"):
             for value in ("false", "true", "0", "1", 0, 1, [], {}, None, False, True):

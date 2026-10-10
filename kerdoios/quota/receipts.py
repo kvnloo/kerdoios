@@ -87,6 +87,12 @@ class UsageReceipt:
     retry_state: str | None = None
     quota_group: str | None = None
 
+    def __post_init__(self) -> None:
+        for field in ("prompt_tokens", "completion_tokens", "cache_tokens"):
+            value = getattr(self, field)
+            if value is not None and value < 0:
+                raise ValueError(f"{field} must be nonnegative")
+
     @property
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
