@@ -17,3 +17,6 @@ jobs:
 
       - name: Unit tests
         run: python3 -m unittest discover -s tests
+
+      - name: Claim-expiry script (offline, fake gh)
+        run: python3 tests/expire_claims.py
