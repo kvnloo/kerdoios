@@ -30,6 +30,12 @@ COMMENTS = {
     "3": [{"body": "claimant: worker-c", "created_at": "2020-01-01T00:00:00Z"}],
     # no claim timestamp at all
     "4": [{"body": "just a note", "created_at": "2020-01-01T00:00:00Z"}],
+    # Renewal beyond REST's first default 30-comment page: active lease must win.
+    "5": (
+        [{"body": "claiming for worker-old\nexpires: 2020-01-01T00:00:00Z", "created_at": "2019-12-31T00:00:00Z"}]
+        + [{"body": f"ordinary discussion {i}", "created_at": "2026-10-13T00:00:00Z"} for i in range(30)]
+        + [{"body": "claiming for worker-new\nexpires: 2999-01-01T00:00:00Z", "created_at": "2026-10-15T00:00:00Z"}]
+    ),
 }
 
 FAKE_GH = r"""#!/usr/bin/env python3
@@ -41,7 +47,17 @@ if args[:2] == ["issue", "list"]:
     sys.exit(0)
 if args and args[0] == "api":
     num = args[1].split("/issues/")[1].split("/")[0]
-    print(json.dumps([{"body": c["body"], "createdAt": c["created_at"]} for c in data[num]]))
+    # Match gh's raw page arrays and reject unsupported formatting flags.
+    if "--slurp" in args and ("--jq" in args or "--template" in args):
+        sys.stderr.write("the --slurp option is not supported with --jq or --template\n")
+        sys.exit(1)
+    selected = data[num] if "--paginate" in args else data[num][:30]
+    if "--slurp" in args:
+        print(json.dumps([selected[i:i + 30] for i in range(0, len(selected), 30)]))
+    elif "--jq" in args:
+        print(json.dumps([{"body": c["body"], "createdAt": c["created_at"]} for c in selected]))
+    else:
+        print(json.dumps(selected))
     sys.exit(0)
 sys.stderr.write("fake gh: unexpected call %r\n" % (args,))
 sys.exit(3)
@@ -67,7 +83,7 @@ def main() -> int:
     failures = []
     if proc.returncode != 0:
         failures.append(f"exit {proc.returncode}: {proc.stderr.strip()}")
-    for want in ("expire #1 ", "keep #2 ", "expire #3 ", "keep #4 (no claim timestamp)", "released 2 lease(s)"):
+    for want in ("expire #1 ", "keep #2 ", "expire #3 ", "keep #4 (no claim timestamp)", "keep #5 ", "released 2 lease(s)"):
         if want not in out:
             failures.append(f"missing {want!r}")
     if failures:
@@ -76,7 +92,7 @@ def main() -> int:
             print(f"  - {f}")
         print(out)
         return 1
-    print("expire-claims: OK (4 fixture issues, 2 released in dry-run)")
+    print("expire-claims: OK (5 fixture issues, 2 released in dry-run)")
     return 0
 
 
