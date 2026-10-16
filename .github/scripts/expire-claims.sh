@@ -33,7 +33,7 @@ read -r -d '' LEASE_STATE_PY <<'PY' || true
 import datetime, json, os, re, sys
 now = int(os.environ["VOL_NOW_EPOCH"])
 max_age = int(os.environ["VOL_MAX_AGE_SECS"])
-comments = json.load(sys.stdin)
+comments = [item for page in json.load(sys.stdin) for item in page]
 iso = re.compile(
     r"(?:expires_at|expires)\s*:\s*([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:[0-9]{2})?)",
     re.I,
@@ -82,7 +82,8 @@ fi
 released=0
 while IFS= read -r num; do
   [[ -n "$num" ]] || continue
-  comments="$(gh api "repos/{owner}/{repo}/issues/${num}/comments" --jq '[.[] | {body, createdAt: .created_at}]')"
+  # gh --paginate --slurp returns page arrays; latest renewals must be considered.
+  comments="$(gh api "repos/{owner}/{repo}/issues/${num}/comments" --paginate --slurp)"
   result="$(printf '%s' "$comments" | lease_state)"
   expired="$(printf '%s\n' "$result" | sed -n '1p')"
   reason="$(printf '%s\n' "$result" | sed -n '2p')"
