@@ -87,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
                       help="JSON evidence document to fold into typed trust (repeatable)")
     rt_p.add_argument("--summary", action="store_true", help="Counts and trust map only")
 
+    fan_p = sub.add_parser(
+        "free-fanout",
+        help="Plan N free-model probe slots. 402/429 sidestep immediately. Never Cursor.",
+    )
+    fan_p.add_argument("--workers", type=int, default=5)
+    fan_p.add_argument("--live", action="store_true", help="Seed slots from live free inventory when present")
+
     plan_p = sub.add_parser("plan", help="Build an execution portfolio")
     explain_p = sub.add_parser("explain", help="Print why workers were placed")
     for item in (plan_p, explain_p):
@@ -222,8 +229,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+    if ns.command == "free-fanout":
+        from .free_fanout import build_fanout
+
+        offers = []
+        if getattr(ns, "live", False):
+            offers = discover_all(include_fixture=False, live=True, free_only=True)
+        print(json.dumps(build_fanout(offers, workers=int(ns.workers)), indent=2))
+        return 0
     requirement = None
-    if ns.command not in ("inventory", "runtime"):
+    if ns.command not in ("inventory", "runtime", "free-fanout"):
         try:
             requirement = _req(ns)
         except AodlIngestError as exc:
