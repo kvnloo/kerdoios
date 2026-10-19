@@ -84,6 +84,8 @@ class Telemetry:
     latency_p95_ms: float = 2000.0
     failure_rate: float = 0.02
     availability: float = 0.99
+    # Observed generation rate, not a provider admission limit.
+    output_tok_s: float | None = None
 
 
 @dataclass(frozen=True)
