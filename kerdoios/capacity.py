@@ -317,7 +317,34 @@ def load_env_file(path: Path) -> dict[str, str]:
 
 # ---------------------------------------------------------------- model
 
-def _subscription_lane(spec: Mapping[str, Any], pace: Mapping[str, Any]) -> dict[str, Any]:
+def recent_rate(history: Path | None, pool: str, *, now: float, span_h: float = 6.0) -> float | None:
+    """Weekly-%/h over the last ``span_h`` hours from burn-pace's own sample log (>= 1 h of samples).
+
+    burn-pace bands use the window *average*, which lags a burst: on 2026-10-20 the
+    average said 0.42 %/h while the last three hours ran at 1.66 %/h. Reported beside
+    the band as a warning; the band stays burn-pace's call.
+    """
+    if not history or not Path(history).exists():
+        return None
+    from datetime import datetime
+
+    points = []
+    for line in Path(history).read_text().splitlines()[-2000:]:
+        try:
+            row = json.loads(line)
+            ts = datetime.fromisoformat(row["at"]).timestamp()
+            pct = float(row["lanes"][pool]["weekly_used_pct"])
+        except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+        if now - span_h * 3600 <= ts <= now:
+            points.append((ts, pct))
+    if len(points) < 2 or points[-1][0] - points[0][0] < 3600 or points[-1][1] < points[0][1]:
+        return None
+    return round((points[-1][1] - points[0][1]) / ((points[-1][0] - points[0][0]) / 3600), 3)
+
+
+def _subscription_lane(spec: Mapping[str, Any], pace: Mapping[str, Any],
+                       recent: float | None = None) -> dict[str, Any]:
     pool = (pace.get("lanes") or {}).get(spec["pool"])
     z = pace.get("z0_factory") or {}
     if not pool:
@@ -332,6 +359,10 @@ def _subscription_lane(spec: Mapping[str, Any], pace: Mapping[str, Any]) -> dict
     # dispatchable budget is the gap between that rate and what is already burning.
     pacing["headroom_pct_per_h"] = round(headroom, 3)
     pacing["avoid"] = avoid
+    pacing["recent_pct_per_h"] = recent
+    if recent is not None and recent > float(pool.get("sustainable_pct_per_h") or 0):
+        pacing["warning"] = (f"last hours burned {recent} %/h, above the sustainable "
+                             f"{pool.get('sustainable_pct_per_h')} %/h; the band uses the window average")
     blocked = None
     if avoid or pool.get("band") == "hard-throttle" or agents <= 0:
         blocked = f"burn-pace band {pool.get('band')}{' (avoid)' if avoid else ''}"
@@ -374,6 +405,7 @@ def _api_lane(spec: Mapping[str, Any], published: Mapping[str, Any], headers: Ma
 
 
 def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str, Any] | None = None,
+                   burn_pace_history: Path | None = None,
                    catalog_db: Path | None = None, historical: Path | None = None,
                    free_tier: Path | None = None, notice_globs: Iterable[str] = (),
                    kitchen_runs: Iterable[str] = (), models: Mapping[str, list[str] | None] | None = None,
@@ -398,7 +430,7 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
         row["latency_prior_ms"] = latency
         blocked = None
         if spec["cost_class"] == "subscription":
-            sub = _subscription_lane(spec, pace)
+            sub = _subscription_lane(spec, pace, recent_rate(burn_pace_history, spec["pool"], now=clock))
             row["limits"], row["pacing"], blocked = sub["limits"], sub["pacing"], sub["blocked"]
         elif spec["cost_class"] == "capped":
             fixed = LANE_EVIDENCE.get(lane, {}).get("max_concurrency")
@@ -483,6 +515,8 @@ def default_sources() -> dict[str, Any]:
         "free_tier": Path(os.environ["KERDOIOS_FREE_TIER_CATALOG"]) if os.environ.get("KERDOIOS_FREE_TIER_CATALOG") else None,
         "notice_globs": globs("KERDOIOS_NOTICE_GLOBS"),
         "kitchen_runs": globs("KERDOIOS_KITCHEN_RUNS"),
+        "burn_pace_history": Path(os.environ.get(
+            "KERDOIOS_BURN_PACE_HISTORY", Path.home() / ".z0int/state/posture/burn-pace.jsonl")),
     }
 
 

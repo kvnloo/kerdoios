@@ -40,6 +40,18 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(opus["slots_now"], 12)
         self.assertAlmostEqual(opus["pacing"]["headroom_pct_per_h"], 0.6)
 
+    def test_recent_burst_is_reported_beside_the_band(self) -> None:
+        hist = self.tmp / "burn-pace.jsonl"
+        rows = [("2026-01-15T05:00:00+00:00", 47.0), ("2026-01-15T08:00:00+00:00", 52.0)]
+        hist.write_text("".join(json.dumps({"at": at, "lanes": {"claude": {"weekly_used_pct": p}}}) + "\n"
+                                for at, p in rows))
+        from datetime import datetime
+        now = datetime.fromisoformat("2026-01-15T08:10:00+00:00").timestamp()
+        opus = self.cap(burn_pace_history=hist, now=now)["opus"]
+        self.assertAlmostEqual(opus["pacing"]["recent_pct_per_h"], 1.667, places=2)
+        self.assertIn("warning", opus["pacing"])
+        self.assertEqual(opus["slots_now"], 12)  # burn-pace stays the authority on the band
+
     def test_hard_throttle_or_avoided_pool_gets_no_slots(self) -> None:
         sol = self.cap()["sol"]
         self.assertEqual(sol["slots_now"], 0)
