@@ -108,6 +108,7 @@ TRIAL_STEP, TRIAL_MAX = 5, 4  # a low-confidence free lane earns one slot per 5 
 # Pace published request rates below the ceiling: NVIDIA states "up to 40 rpm", varying with
 # model and shared load, and a retry also spends a request.
 PUBLISHED_RATE_MARGIN = 0.9
+API_MAX_CONCURRENCY = 8
 
 
 def _limit(value: Any, classification: str, confidence: str, evidence: Any) -> dict[str, Any]:
@@ -152,7 +153,7 @@ def load_state(path: Path | None = None) -> dict[str, Any]:
 
 def observe(lane: str, status: str, *, retry_after_s: float | None = None, now: float | None = None,
             nous_used: float | None = None, nous_cap: float | None = None, model: str | None = None,
-            path: Path | None = None) -> dict[str, Any]:
+            seconds: float | None = None, path: Path | None = None) -> dict[str, Any]:
     """Record one executor outcome. Throttles set a cooldown every caller honours.
 
     ``status``: ok | rate_limited | quota | unsupported_model | error. A provider
@@ -192,6 +193,11 @@ def observe(lane: str, status: str, *, retry_after_s: float | None = None, now: 
         elif status == "ok":
             row["consecutive_throttles"] = 0
             row["last_ok"] = clock
+            if seconds and seconds > 0:
+                # Measured job latency (EWMA): Little's law sizes concurrency from real jobs, not
+                # from the catalog's short probe requests (NIM scans take ~10x a probe).
+                prev = row.get("latency_s_ewma")
+                row["latency_s_ewma"] = round(seconds if prev is None else 0.8 * float(prev) + 0.2 * seconds, 2)
         if nous_used is not None and nous_cap is not None:
             state["nous_cap"] = {"used_usd": nous_used, "cap_usd": nous_cap, "observed_at": clock,
                                  "source": f"executor notice via {lane}"}
@@ -414,7 +420,7 @@ def _api_lane(spec: Mapping[str, Any], published: Mapping[str, Any], headers: Ma
                                         f"min(rpm, tpm / {int(tokens)} tokens per job)")
         secs = (latency_ms or 2000) / 1000
         # Little's law: in-flight = arrival rate x latency, plus one for jitter.
-        conc = max(1, min(8, math.ceil(jobs_per_min * secs / 60) + 1))
+        conc = max(1, min(API_MAX_CONCURRENCY, math.ceil(jobs_per_min * secs / 60) + 1))
         limits["max_concurrency"] = _limit(conc, "inferred", "medium",
                                            f"Little's law at {jobs_per_min:.1f} jobs/min x {secs:.1f}s latency")
     else:
@@ -478,6 +484,10 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
             if lane in LANE_EVIDENCE:
                 row["limits"] = {k: _limit(*v) for k, v in LANE_EVIDENCE[lane].items()}
             elif spec.get("tokens_per_job_prior"):
+                measured_s = ((state.get("lanes") or {}).get(lane) or {}).get("latency_s_ewma")
+                if measured_s:
+                    latency = max(latency or 0, float(measured_s) * 1000)
+                    row["latency_measured_ms"] = round(float(measured_s) * 1000)
                 row["limits"] = _api_lane(spec, pub, headers.get((spec["provider"], spec["model"]), {}), latency)
             else:
                 row["limits"] = {"max_concurrency": _limit(1, "inferred", "low",

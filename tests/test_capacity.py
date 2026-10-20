@@ -100,6 +100,18 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(nim["jobs_per_min"]["value"], 36.0)
         self.assertEqual(nim["window_jobs"]["value"], 10000)
 
+    def test_measured_job_latency_sizes_api_concurrency(self) -> None:
+        self.free.write_text(json.dumps({"llm_apis": [{"provider": "nvidia", "source_ids": [1], "models": [
+            {"model": "*", "rpm": 40, "rpd": 10000}]}]}))
+        path = self.tmp / "state.json"
+        before = self.cap(state=load_state(path))["nim"]["slots_now"]
+        for i in range(5):
+            observe("nim", "ok", seconds=12.0, now=NOW + i, path=path)
+        nim = self.cap(state=load_state(path), now=NOW + 10)["nim"]
+        self.assertEqual(nim["latency_measured_ms"], 12000)
+        self.assertEqual(nim["slots_now"], 8)  # 36 jobs/min x 12 s = 7.2 in flight, +1, capped at 8
+        self.assertLess(before, 8)
+
     def test_quota_stop_rests_lane_at_once_then_probes_one_slot(self) -> None:
         path = self.tmp / "state.json"
         observe("minimax", "ok", now=NOW, path=path)
