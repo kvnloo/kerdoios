@@ -79,6 +79,48 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(nim["slots_now"], 0)
         self.assertIn("not in provider", nim["reason"])
 
+    def test_nim_picks_first_listed_preferred_model_and_skips_unsupported(self) -> None:
+        listed = ["z-ai/glm-5.3", "nvidia/nemotron-3.5-lightning-30b-a3b"]  # ultra retired from the list
+        nim = self.cap(models={"nim": listed})["nim"]
+        self.assertEqual(nim["model"], "z-ai/glm-5.3")
+        self.assertGreater(nim["slots_now"], 0)
+        path = self.tmp / "state.json"
+        observe("nim", "unsupported_model", model="z-ai/glm-5.3", now=NOW, path=path)
+        nim = self.cap(models={"nim": listed}, state=load_state(path), now=NOW + 10)["nim"]
+        self.assertEqual(nim["model"], "nvidia/nemotron-3.5-lightning-30b-a3b")
+        self.assertEqual(nim["state"]["jobs_24h"], 0)  # a 404 is not a spent request window
+        observe("nim", "unsupported_model", model="nvidia/nemotron-3.5-lightning-30b-a3b", now=NOW, path=path)
+        nim = self.cap(models={"nim": listed}, state=load_state(path), now=NOW + 10)["nim"]
+        self.assertEqual(nim["slots_now"], 0)
+
+    def test_published_rpm_is_paced_below_the_ceiling(self) -> None:
+        self.free.write_text(json.dumps({"llm_apis": [{"provider": "nvidia", "source_ids": [1], "models": [
+            {"model": "*", "rpm": 40, "rpd": 10000}]}]}))
+        nim = self.cap()["nim"]["limits"]
+        self.assertEqual(nim["jobs_per_min"]["value"], 36.0)
+        self.assertEqual(nim["window_jobs"]["value"], 10000)
+
+    def test_measured_job_latency_sizes_api_concurrency(self) -> None:
+        self.free.write_text(json.dumps({"llm_apis": [{"provider": "nvidia", "source_ids": [1], "models": [
+            {"model": "*", "rpm": 40, "rpd": 10000}]}]}))
+        path = self.tmp / "state.json"
+        before = self.cap(state=load_state(path))["nim"]["slots_now"]
+        for i in range(5):
+            observe("nim", "ok", seconds=12.0, now=NOW + i, path=path)
+        nim = self.cap(state=load_state(path), now=NOW + 10)["nim"]
+        self.assertEqual(nim["latency_measured_ms"], 12000)
+        self.assertEqual(nim["slots_now"], 8)  # 36 jobs/min x 12 s = 7.2 in flight, +1, capped at 8
+        self.assertLess(before, 8)
+
+    def test_quota_stop_rests_lane_at_once_then_probes_one_slot(self) -> None:
+        path = self.tmp / "state.json"
+        observe("minimax", "ok", now=NOW, path=path)
+        observe("minimax", "quota", now=NOW + 1, path=path)
+        lane = self.cap(state=load_state(path), now=NOW + 60)["minimax"]
+        self.assertEqual(lane["slots_now"], 0)
+        self.assertIn("cooling down", lane["reason"])
+        self.assertLessEqual(self.cap(state=load_state(path), now=NOW + 3700)["minimax"]["slots_now"], 1)
+
     def test_metered_lane_waits_for_explicit_permission(self) -> None:
         self.assertEqual(self.cap()["cerebras"]["slots_now"], 0)
         self.assertGreater(self.cap(allow_metered=True)["cerebras"]["slots_now"], 0)

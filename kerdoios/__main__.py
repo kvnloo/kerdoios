@@ -177,7 +177,8 @@ def main(argv: list[str] | None = None) -> int:
     cap_sub = cap_p.add_subparsers(dest="cap_command")
     cap_obs = cap_sub.add_parser("observe", help="Record an executor outcome (throttles cool the lane down)")
     cap_obs.add_argument("--lane", required=True)
-    cap_obs.add_argument("--status", required=True, choices=["ok", "rate_limited", "error"])
+    cap_obs.add_argument("--status", required=True, choices=["ok", "rate_limited", "quota", "unsupported_model", "error"])
+    cap_obs.add_argument("--model", default=None, help="model id (with --status unsupported_model)")
     cap_obs.add_argument("--retry-after", dest="retry_after", type=float, default=None)
     cap_obs.add_argument("--nous-used", dest="nous_used", type=float, default=None)
     cap_obs.add_argument("--nous-cap", dest="nous_cap", type=float, default=None)
@@ -188,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if ns.cap_command == "observe":
             row = observe(ns.lane, ns.status, retry_after_s=ns.retry_after,
-                          nous_used=ns.nous_used, nous_cap=ns.nous_cap)
+                          nous_used=ns.nous_used, nous_cap=ns.nous_cap, model=ns.model)
             print(json.dumps({k: v for k, v in row.items() if k != "events"}, sort_keys=True))
             return 0
         doc = current_capacity(live_model_check=ns.live_models, allow_metered=ns.allow_metered,

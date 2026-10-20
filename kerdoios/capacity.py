@@ -71,7 +71,14 @@ LANE_SPECS: dict[str, dict[str, Any]] = {
              "cost_class": "free", "catalog_provider": "groq", "data_policy": "unstated",
              "tokens_per_job_prior": 2500, "models_url": "https://api.groq.com/openai/v1/models",
              "key_env": "GROQ_API_KEY"},
-    "nim": {"pool": "nvidia-free", "provider": "nvidia", "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+    # NIM shares one 40 RPM / 10k RPD budget across every model, so the lane is one pool with
+    # an ordered model preference. The first id that /v1/models lists and that has not failed
+    # as unsupported for this account (404 "Function not found") is used. Order (probed
+    # 2026-10-20 on a repo-scan prompt): nemotron-3-ultra 550B answered in ~1.4 s; glm-5.3 in
+    # ~12 s; lightning-30b is the small fallback. Listed but 404 for this account:
+    # nemotron-3-super, llama-3.1-nemotron-ultra-253b, mistral-large-2, nemotron-nano-3.
+    "nim": {"pool": "nvidia-free", "provider": "nvidia", "model": "nvidia/nemotron-3-ultra-550b-a55b",
+            "models": ["nvidia/nemotron-3-ultra-550b-a55b", "z-ai/glm-5.3", "nvidia/nemotron-3.5-lightning-30b-a3b"],
             "cost_class": "free", "catalog_provider": "nvidia", "data_policy": "trial-no-confidential",
             "tokens_per_job_prior": 2500, "models_url": "https://integrate.api.nvidia.com/v1/models",
             "key_env": "NVIDIA_API_KEY"},
@@ -98,6 +105,10 @@ BURN_PACE_TTL_S = 600
 COOLDOWN_CAP_S = 3600
 SUSPECT_QUOTA_AFTER = 3  # consecutive throttles after backoff mean a spent window
 TRIAL_STEP, TRIAL_MAX = 5, 4  # a low-confidence free lane earns one slot per 5 clean jobs, up to 4
+# Pace published request rates below the ceiling: NVIDIA states "up to 40 rpm", varying with
+# model and shared load, and a retry also spends a request.
+PUBLISHED_RATE_MARGIN = 0.9
+API_MAX_CONCURRENCY = 8
 
 
 def _limit(value: Any, classification: str, confidence: str, evidence: Any) -> dict[str, Any]:
@@ -141,22 +152,35 @@ def load_state(path: Path | None = None) -> dict[str, Any]:
 
 
 def observe(lane: str, status: str, *, retry_after_s: float | None = None, now: float | None = None,
-            nous_used: float | None = None, nous_cap: float | None = None,
-            path: Path | None = None) -> dict[str, Any]:
+            nous_used: float | None = None, nous_cap: float | None = None, model: str | None = None,
+            seconds: float | None = None, path: Path | None = None) -> dict[str, Any]:
     """Record one executor outcome. Throttles set a cooldown every caller honours.
 
-    ``status``: ok | rate_limited | error. A provider Retry-After wins; otherwise
-    backoff doubles per consecutive throttle from 60 s. After
-    SUSPECT_QUOTA_AFTER consecutive throttles the window is treated as spent and
+    ``status``: ok | rate_limited | quota | unsupported_model | error. A provider
+    Retry-After wins; otherwise backoff doubles per consecutive throttle from 60 s.
+    After SUSPECT_QUOTA_AFTER consecutive throttles the window is treated as spent and
     the lane rests for COOLDOWN_CAP_S, because retrying a spent quota only
-    produces a 429 storm.
+    produces a 429 storm. ``quota`` is an executor that already knows the window is
+    spent (retry_class ``stop_lane``: "provider.quota", "daily limit", credits): the
+    lane rests at once, then probes with one slot. ``unsupported_model`` (with
+    ``model``) drops that id from the lane's model preference for 24 h.
     """
     clock = time.time() if now is None else now
     with _locked_state(path or state_path()) as state:
         row = state["lanes"].setdefault(lane, {"events": [], "consecutive_throttles": 0})
         row["events"] = [e for e in row.get("events", []) if clock - e[0] < 48 * 3600]
+        if status == "unsupported_model":
+            if model:
+                row.setdefault("unsupported_models", {})[model] = clock
+            return dict(row)
         row["events"].append([clock, status])
-        if status == "rate_limited":
+        if status == "quota":
+            row["consecutive_throttles"] = max(SUSPECT_QUOTA_AFTER, int(row.get("consecutive_throttles", 0)) + 1)
+            row["quota_suspected"] = {"at": clock, "ok_jobs_before": _ok_since_last_exhaustion(row["events"][:-1]),
+                                      "source": "executor stop_lane"}
+            wait = retry_after_s if retry_after_s and retry_after_s > COOLDOWN_CAP_S else COOLDOWN_CAP_S
+            row["cooldown_until"] = max(float(row.get("cooldown_until") or 0), clock + min(wait, 24 * 3600))
+        elif status == "rate_limited":
             row["consecutive_throttles"] = int(row.get("consecutive_throttles", 0)) + 1
             n = row["consecutive_throttles"]
             if n >= SUSPECT_QUOTA_AFTER:
@@ -169,6 +193,11 @@ def observe(lane: str, status: str, *, retry_after_s: float | None = None, now: 
         elif status == "ok":
             row["consecutive_throttles"] = 0
             row["last_ok"] = clock
+            if seconds and seconds > 0:
+                # Measured job latency (EWMA): Little's law sizes concurrency from real jobs, not
+                # from the catalog's short probe requests (NIM scans take ~10x a probe).
+                prev = row.get("latency_s_ewma")
+                row["latency_s_ewma"] = round(seconds if prev is None else 0.8 * float(prev) + 0.2 * seconds, 2)
         if nous_used is not None and nous_cap is not None:
             state["nous_cap"] = {"used_usd": nous_used, "cap_usd": nous_cap, "observed_at": clock,
                                  "source": f"executor notice via {lane}"}
@@ -179,7 +208,7 @@ def _ok_since_last_exhaustion(events: list) -> int:
     """Successful jobs between the previous throttle run and the current one: the learned window size."""
     count, in_current_run = 0, True
     for _, status in reversed(events):
-        if status == "rate_limited":
+        if status in ("rate_limited", "quota"):
             if in_current_run:
                 continue
             break
@@ -381,7 +410,8 @@ def _api_lane(spec: Mapping[str, Any], published: Mapping[str, Any], headers: Ma
             limits[dim] = _limit(published[dim], "published", "medium",
                                  f"free-tier catalog sources {published.get('source_ids')}")
     tokens = float(spec.get("tokens_per_job_prior") or 2500)
-    rate = [limits[d]["value"] for d in ("rpm",) if d in limits]
+    rate = [limits[d]["value"] * (PUBLISHED_RATE_MARGIN if limits[d]["classification"] == "published" else 1)
+            for d in ("rpm",) if d in limits]
     if "tpm" in limits:
         rate.append(limits["tpm"]["value"] / tokens)
     jobs_per_min = min(rate) if rate else None
@@ -390,7 +420,7 @@ def _api_lane(spec: Mapping[str, Any], published: Mapping[str, Any], headers: Ma
                                         f"min(rpm, tpm / {int(tokens)} tokens per job)")
         secs = (latency_ms or 2000) / 1000
         # Little's law: in-flight = arrival rate x latency, plus one for jitter.
-        conc = max(1, min(8, math.ceil(jobs_per_min * secs / 60) + 1))
+        conc = max(1, min(API_MAX_CONCURRENCY, math.ceil(jobs_per_min * secs / 60) + 1))
         limits["max_concurrency"] = _limit(conc, "inferred", "medium",
                                            f"Little's law at {jobs_per_min:.1f} jobs/min x {secs:.1f}s latency")
     else:
@@ -454,6 +484,10 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
             if lane in LANE_EVIDENCE:
                 row["limits"] = {k: _limit(*v) for k, v in LANE_EVIDENCE[lane].items()}
             elif spec.get("tokens_per_job_prior"):
+                measured_s = ((state.get("lanes") or {}).get(lane) or {}).get("latency_s_ewma")
+                if measured_s:
+                    latency = max(latency or 0, float(measured_s) * 1000)
+                    row["latency_measured_ms"] = round(float(measured_s) * 1000)
                 row["limits"] = _api_lane(spec, pub, headers.get((spec["provider"], spec["model"]), {}), latency)
             else:
                 row["limits"] = {"max_concurrency": _limit(1, "inferred", "low",
@@ -462,17 +496,30 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
                 row["spend"] = {"usd_per_job_prior": spec.get("usd_per_job_prior"), "balance": "unknown"}
                 if not allow_metered:
                     blocked = "metered lane with unknown balance; pass allow_metered to use"
+        live = (state.get("lanes") or {}).get(lane, {})
+        dead = {m for m, t in (live.get("unsupported_models") or {}).items() if clock - float(t) < 24 * 3600}
+        prefs = [m for m in spec.get("models") or [spec["model"]] if m not in dead]
         if models is not None and lane in models:
             listed = models[lane]
-            row["model_listed"] = None if listed is None else spec["model"] in listed
-            if listed is not None and spec["model"] not in listed:
+            usable = prefs if listed is None else [m for m in prefs if m in listed]
+            row["model_listed"] = None if listed is None else bool(usable)
+            if listed is not None and not usable:
                 blocked = f"model {spec['model']} not in provider /v1/models (retired?)"
+        else:
+            usable = prefs
+        if spec.get("models"):
+            # The id executors should call now; the rest are fallbacks in order.
+            row["model"] = usable[0] if usable else spec["model"]
+            row["models"] = usable
+            if dead:
+                row["unsupported_models"] = sorted(dead)
+            if not usable and not blocked:
+                blocked = "every preferred model failed as unsupported for this account"
         # Live overlay: cooldowns and window usage reported by executors.
-        live = (state.get("lanes") or {}).get(lane, {})
         events = [e for e in live.get("events", []) if clock - e[0] < 24 * 3600]
         used_24h = sum(1 for e in events if e[1] in ("ok", "error"))
         cooldown = float(live.get("cooldown_until") or 0)
-        row["state"] = {"jobs_24h": used_24h, "throttles_24h": sum(1 for e in events if e[1] == "rate_limited"),
+        row["state"] = {"jobs_24h": used_24h,                        "throttles_24h": sum(1 for e in events if e[1] in ("rate_limited", "quota")),
                         "cooldown_until": cooldown if cooldown > clock else None,
                         "quota_suspected": live.get("quota_suspected")}
         if cooldown > clock and not blocked:
