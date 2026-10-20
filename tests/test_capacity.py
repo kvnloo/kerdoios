@@ -93,6 +93,14 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(ds["window_jobs_left"], 0)
         self.assertEqual(ds["slots_now"], 0)
 
+    def test_trial_lane_grows_on_clean_runs_and_falls_back_on_a_throttle(self) -> None:
+        path = self.tmp / "state.json"
+        for i in range(10):
+            observe("minimax", "ok", now=NOW + i, path=path)
+        self.assertEqual(self.cap(state=load_state(path), now=NOW + 60)["minimax"]["slots_now"], 3)
+        observe("minimax", "rate_limited", now=NOW + 61, path=path)
+        self.assertEqual(self.cap(state=load_state(path), now=NOW + 4000)["minimax"]["slots_now"], 1)
+
     def test_executor_notice_newer_than_files_wins(self) -> None:
         path = self.tmp / "state.json"
         observe("haiku", "ok", now=NOW, nous_used=160.0, nous_cap=220.0, path=path)

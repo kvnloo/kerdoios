@@ -97,6 +97,7 @@ NOTICE = re.compile(r"You.ve used \$([0-9][0-9,]*\.?[0-9]*) of your \$([0-9][0-9
 BURN_PACE_TTL_S = 600
 COOLDOWN_CAP_S = 3600
 SUSPECT_QUOTA_AFTER = 3  # consecutive throttles after backoff mean a spent window
+TRIAL_STEP, TRIAL_MAX = 5, 4  # a low-confidence free lane earns one slot per 5 clean jobs, up to 4
 
 
 def _limit(value: Any, classification: str, confidence: str, evidence: Any) -> dict[str, Any]:
@@ -444,6 +445,14 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
                         "quota_suspected": live.get("quota_suspected")}
         if cooldown > clock and not blocked:
             blocked = f"cooling down {int(cooldown - clock)}s after throttling"
+        ok_24h = sum(1 for e in events if e[1] == "ok")
+        mc = row["limits"].get("max_concurrency", {})
+        if mc.get("confidence") in ("low", "none") and spec["cost_class"] == "free" and ok_24h >= TRIAL_STEP \
+                and row["state"]["throttles_24h"] == 0:
+            # Additive increase on clean evidence; any throttle in 24 h drops back to the trial slot.
+            grown = min(TRIAL_MAX, int(mc.get("value") or 1) + ok_24h // TRIAL_STEP)
+            row["limits"]["max_concurrency"] = _limit(grown, "measured", "low",
+                                                      f"{ok_24h} clean jobs in 24 h, no throttles (additive increase)")
         conc = row["limits"].get("max_concurrency", {}).get("value") or 0
         window = row["limits"].get("window_jobs", {}).get("value")
         window_left = None if window is None else max(0, int(window) - used_24h)
