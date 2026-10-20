@@ -87,7 +87,19 @@ python3 -m kerdoios inventory
 python3 -m kerdoios inventory --live
 python3 -m kerdoios plan --workers 100 --context 128000 --budget 0.50 --mode cheap
 python3 -m kerdoios explain --workers 100 --budget 0.50
+python3 -m kerdoios capacity --summary            # what each lane can absorb right now
+python3 -m kerdoios capacity observe --lane ds --status rate_limited
 ```
+
+`capacity` folds burn-pace (paid subscription pacing), the Hermes Nous spend-cap
+notice, the offline rate-limit catalog, a published free-tier catalog and live
+executor throttles into one `kerdoios.capacity.v1` document. Each limit is labelled
+measured, published, inferred or unknown, with evidence. Unknown is one trial slot,
+never unlimited. Source paths come from `KERDOIOS_RATE_LIMIT_DIR`,
+`KERDOIOS_FREE_TIER_CATALOG`, `KERDOIOS_NOTICE_GLOBS` and `KERDOIOS_KITCHEN_RUNS`;
+live state lives in `KERDOIOS_CAPACITY_STATE` (default
+`~/.hermes/cache/kerdoios/capacity_state.json`). `--live-models` GETs provider model
+lists so retired ids block their lane; it never runs inference.
 
 Once loaded by Hermes:
 
