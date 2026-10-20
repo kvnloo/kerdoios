@@ -490,6 +490,9 @@ def build_capacity(*, pace: Mapping[str, Any] | None = None, state: Mapping[str,
         window_left = None if window is None else max(0, int(window) - used_24h)
         row["window_jobs_left"] = window_left
         slots = 0 if blocked else int(conc)
+        if live.get("quota_suspected") and int(live.get("consecutive_throttles") or 0) >= SUSPECT_QUOTA_AFTER:
+            # After a spent window, probe with one request; parallel probes only burn throttles.
+            slots = min(slots, 1)
         if window_left is not None:
             slots = min(slots, window_left)
         row["slots_now"] = slots

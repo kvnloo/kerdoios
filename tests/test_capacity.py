@@ -96,6 +96,9 @@ class CapacityTests(unittest.TestCase):
         state = load_state(path)
         self.assertEqual(state["lanes"]["ds"]["quota_suspected"]["ok_jobs_before"], 1)
         self.assertEqual(state["lanes"]["ds"]["cooldown_until"], NOW + 200 + 3600)
+        self.assertEqual(self.cap(state=state, now=NOW + 4000)["ds"]["slots_now"], 1)  # one probe, not two
+        observe("ds", "ok", now=NOW + 4001, path=path)
+        self.assertEqual(self.cap(state=load_state(path), now=NOW + 4002)["ds"]["slots_now"], 2)
 
     def test_window_usage_counts_against_the_lane_budget(self) -> None:
         path = self.tmp / "state.json"
