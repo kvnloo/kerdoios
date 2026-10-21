@@ -1,0 +1,13 @@
+[Unit]
+Description=Kerdoios read-only provider capacity projection
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=KERDOIOS_PYTHON=python3
+EnvironmentFile=-%h/.config/kerdoios/capacity.env
+ExecStart=/bin/sh -c 'exec "$KERDOIOS_PYTHON" -m kerdoios capacity'
+UMask=0077
+Nice=10
+StandardOutput=journal
+StandardError=journal
