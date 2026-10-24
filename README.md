@@ -97,6 +97,42 @@ hermes kerdoios plan
 hermes kerdoios explain
 ```
 
+## Model-routing objective (O14)
+
+`kerdoios.routing_objective.plan_routing(offers, requirement, metrics,
+lambda_value=1, lambda_evidence=...)` owns the approved single-call objective:
+
+```text
+latency_u = TTFT_u + out_tokens_t / tok/s_u
+pace_u = burn_u * tokens_t / (remaining_u / time_to_reset_u)
+score_u = latency_u * (1 + λ * pace_u) / p_accept[u, task_class(t)]
+```
+
+Minimize among offers that pass the existing capability, privacy, context, tool
+and reliability hard filters. Source: OMP session
+`01a16527-824c-7714-8205-9a2d0d5eff38`, ordinal 4409, 2026-10-24 03:32:22Z;
+Kevin confirmed the agreement on 2026-10-24. The default lambda is 1 and
+**unmeasured**, not an empirical calibration; other values require measured
+source and timestamp. TTFT is seconds, throughput output tokens/second, reset
+horizon hours; preserve the burn/balance quota unit rather than silently mixing
+credits, tokens or account fractions.
+
+Unknown TTFT, throughput, burn, balance, reset or task acceptance produces an
+`unscored` entry, never a guessed zero. Task-class verified acceptance may update
+the benchmark prior through the existing blend weight only after five
+observations. HTTP completion and arbitrary benchmark scores are not acceptance
+probabilities. The existing portfolio objectives are unchanged. z0intelligence's
+compiled O14 policy enforces this output and owns quota admission and receipts;
+Kerdoios does not become another gateway.
+
+`observed.record_routing_attempt` records real transport status, measured token
+counts and numeric/ISO quota headers in the existing observation ledger. Its
+`routing_quota` records are deliberately excluded from task-success aggregates.
+The model-routing catalog can capture the first actual OpenCode Go/DeepSeek 429
+and any explicit daily reset. Partial logs do not prove a daily cap, and missing
+account/window attribution stays unknown. No synthetic request is sent to reach
+a limit.
+
 ## Architecture
 
 ```text
