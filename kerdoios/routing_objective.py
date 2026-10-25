@@ -58,7 +58,7 @@ def plan_routing(offers: list[ResourceOffer], req: WorkRequirement, metrics: dic
         required = ("ttft_seconds", "tokens_per_second", "burn", "remaining", "time_to_reset_hours", "p_accept")
         if (any(not _finite(values.get(k), positive=k not in ("burn", "ttft_seconds")) for k in required)
                 or values.get("p_accept", 0) > 1):
-            unscored.append({"offer_id": offer.id, "provider": offer.transport or offer.provider,
+            unscored.append({"offer_id": offer.id, "provider": offer.provider,
                              "model": offer.model, "reason": "unknown_objective_inputs"})
             continue
         p_accept = values["p_accept"]
@@ -76,7 +76,7 @@ def plan_routing(offers: list[ResourceOffer], req: WorkRequirement, metrics: dic
         pace = values["burn"] * total_tokens / (values["remaining"] / values["time_to_reset_hours"])
         score = latency * (1 + lambda_value * pace) / p_accept
         if not math.isfinite(score):
-            unscored.append({"offer_id": offer.id, "provider": offer.transport or offer.provider,
+            unscored.append({"offer_id": offer.id, "provider": offer.provider,
                              "model": offer.model, "reason": "nonfinite_objective"})
             continue
         inputs = {**values, "input_tokens": req.estimated_input_tokens,
@@ -84,6 +84,6 @@ def plan_routing(offers: list[ResourceOffer], req: WorkRequirement, metrics: dic
                   "lambda": lambda_value, "lambda_evidence": evidence,
                   "p_accept_used": p_accept, "formula_id": FORMULA_ID}
         ranked.append(RoutingScore(offer, score, latency, pace, p_accept, inputs))
-    ranked.sort(key=lambda row: (row.score, row.offer.transport or row.offer.provider, row.offer.model, row.offer.id))
+    ranked.sort(key=lambda row: (row.score, row.offer.provider, row.offer.model, row.offer.id))
     return {"ranked": ranked, "unscored": unscored, "rejections": rejected,
             "formula_id": FORMULA_ID}
