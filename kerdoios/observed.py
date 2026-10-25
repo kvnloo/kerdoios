@@ -237,6 +237,9 @@ def load_observations(*, path: Path | None = None) -> list[Observation]:
             except json.JSONDecodeError:
                 # One corrupt line must not lose every prior observation.
                 continue
+            if payload.get("kind") == "routing_quota":
+                # Account-limit observations are not placement/task outcomes.
+                continue
             try:
                 rows.append(_from_payload(payload))
             except (KeyError, TypeError, ValueError):
@@ -469,3 +472,53 @@ def import_allocation_observations(
         record(obs, path=dest)
         count += 1
     return {"imported": count, "skipped": skipped, "path": str(dest or DEFAULT_LOG_PATH)}
+
+
+def record_routing_attempt(*, provider: str, model: str, trace_id: str, http_status: int,
+                           quota_headers: dict | None = None, input_tokens=None,
+                           output_tokens=None, quota_group: str | None = None,
+                           observed_at: str | None = None, path: Path | None = None) -> dict:
+    """Capture real transport status/allowlisted limits in the existing ledger.
+
+    No cost or verified-success is invented. The catalog consumes these separate
+    observations for the first genuine 429, never as capability/acceptance data.
+    """
+    from datetime import datetime, timezone
+    import fcntl
+    import re
+    if type(http_status) is not int or not 0 <= http_status <= 599:
+        raise ValueError("Invalid actual HTTP status")
+    if not all(isinstance(value, str) and value for value in (provider, model, trace_id)):
+        raise ValueError("Actual provider/model/trace required")
+    for value in (input_tokens, output_tokens):
+        if value is not None and (type(value) is not int or value < 0):
+            raise ValueError("Invalid measured token count")
+    at = observed_at or datetime.now(timezone.utc).isoformat()
+    if datetime.fromisoformat(at.replace("Z", "+00:00")).tzinfo is None:
+        raise ValueError("Quota timestamp requires timezone")
+    headers = {}
+    for key, value in (quota_headers or {}).items():
+        key, value = str(key).lower(), str(value)
+        if key != "retry-after" and not re.fullmatch(
+                r"x-ratelimit-(limit|remaining|reset)-(requests|tokens)(-day|-hour|-minute)?", key):
+            continue
+        if re.fullmatch(r"(?:\d+(?:\.\d+)?(?:ms|s|m|h|d)?)+", value):
+            headers[key] = value
+            continue
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                headers[key] = parsed.isoformat()
+        except ValueError:
+            pass
+    row = {"kind": "routing_quota", "provider": provider, "model": model,
+           "trace_id": trace_id, "observed_at": at, "http_status": http_status,
+           "quota_headers": headers, "input_tokens": input_tokens,
+           "output_tokens": output_tokens, "quota_group": quota_group,
+           "scope_note": "Observed routed attempt; complete daily account/window coverage is not established"}
+    target = path or DEFAULT_LOG_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        stream.write(json.dumps(row) + "\n")
+    return row
