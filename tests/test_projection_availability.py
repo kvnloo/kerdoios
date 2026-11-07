@@ -16,7 +16,6 @@ These tests pin the observed-only behaviour so neither regresses.
 
 from __future__ import annotations
 
-import json
 import unittest
 from unittest import mock
 
