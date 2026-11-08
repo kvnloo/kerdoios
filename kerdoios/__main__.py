@@ -168,9 +168,38 @@ def main(argv: list[str] | None = None) -> int:
     econ_p = sub.add_parser("economics", help="Tokens/cost per verified task from observed log")
     econ_p.add_argument("--capability-id", dest="capability_id", default=None)
     econ_p.add_argument("--path", type=Path, default=None, help="observed.jsonl override")
-
+    cap_p = sub.add_parser("capacity", help="Per-lane capacity right now (burn-pace, spend cap, rate-limit evidence)")
+    cap_p.add_argument("--live-models", action="store_true",
+                       help="GET provider model lists so retired model ids block their lane")
+    cap_p.add_argument("--allow-metered", action="store_true", help="Let metered lanes with unknown balance take work")
+    cap_p.add_argument("--env-file", type=Path, default=None, help="dotenv with provider keys (default ~/.hermes/.env)")
+    cap_p.add_argument("--summary", action="store_true", help="One line per lane instead of the full document")
+    cap_sub = cap_p.add_subparsers(dest="cap_command")
+    cap_obs = cap_sub.add_parser("observe", help="Record an executor outcome (throttles cool the lane down)")
+    cap_obs.add_argument("--lane", required=True)
+    cap_obs.add_argument("--status", required=True, choices=["ok", "rate_limited", "error"])
+    cap_obs.add_argument("--retry-after", dest="retry_after", type=float, default=None)
+    cap_obs.add_argument("--nous-used", dest="nous_used", type=float, default=None)
+    cap_obs.add_argument("--nous-cap", dest="nous_cap", type=float, default=None)
 
     ns = parser.parse_args(argv)
+    if ns.command == "capacity":
+        from .capacity import current_capacity, observe
+
+        if ns.cap_command == "observe":
+            row = observe(ns.lane, ns.status, retry_after_s=ns.retry_after,
+                          nous_used=ns.nous_used, nous_cap=ns.nous_cap)
+            print(json.dumps({k: v for k, v in row.items() if k != "events"}, sort_keys=True))
+            return 0
+        doc = current_capacity(live_model_check=ns.live_models, allow_metered=ns.allow_metered,
+                               env_file=ns.env_file)
+        if ns.summary:
+            for lane, row in doc["lanes"].items():
+                print(f"{lane:9} {row['cost_class']:12} slots={row['slots_now']:<3} "
+                      f"window_left={row['window_jobs_left']!s:6} {row['reason']}")
+            return 0
+        print(json.dumps(doc, indent=1, sort_keys=True, default=str))
+        return 0
     if ns.command == "observations":
         if ns.obs_command == "import":
             print(json.dumps(import_allocation_observations(ns.path, dest=ns.dest), indent=2))
