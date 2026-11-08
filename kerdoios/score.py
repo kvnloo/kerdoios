@@ -51,7 +51,11 @@ def score(offer: ResourceOffer, req: WorkRequirement, weights: dict[str, float])
     cap = capability_fit(offer, req)
     unit_cost = effective_unit_cost(offer, req)
     latency = offer.telemetry.latency_p50_ms
-    throughput = float(offer.capacity.concurrency)
+    throughput = (
+        offer.telemetry.output_tok_s
+        if offer.telemetry.output_tok_s is not None
+        else float(offer.capacity.concurrency)
+    )
     urgency = offer.economics.expiration_urgency()
     # invert cost/latency into "higher is better" fitness
     cost_term = 1.0 / (1.0 + unit_cost * 100.0)
